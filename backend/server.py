@@ -81,6 +81,8 @@ async def generate_page(request: GeneratePageRequest):
     if not api_key:
         raise HTTPException(status_code=500, detail="LLM API key not configured")
 
+    all_images_json = json.dumps(STOCK_IMAGES_BY_CATEGORY, indent=2)
+
     system_prompt = f"""You are an expert web designer AI. Generate a landing page structure as JSON based on the user's prompt.
 
 Return ONLY a valid JSON object with this structure:
@@ -106,7 +108,9 @@ Return ONLY a valid JSON object with this structure:
 RULES:
 1. Generate EXACTLY 5 sections (hero, features, about/team, testimonials/stats, CTA/footer)
 2. Each section: 2-6 elements
-3. Use these stock images: {json.dumps(STOCK_IMAGES[:6])}
+3. For images, pick the MOST RELEVANT category from this image library and use images from it:
+{all_images_json}
+Choose the category closest to the user's prompt topic. Use DIFFERENT images for DIFFERENT sections. Do NOT repeat the same image URL.
 4. Image content format: {{"src": "url", "alt": "description"}}
 5. Button/heading/paragraph content is a string
 6. Use realistic professional content matching the prompt
