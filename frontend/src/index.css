@@ -5,18 +5,18 @@
 @tailwind utilities;
 
 :root {
-  --editor-bg: #1a1a1a;
-  --editor-surface: #262626;
-  --editor-surface-hover: #333333;
-  --editor-border: #404040;
+  --editor-bg: #2d2d32;
+  --editor-surface: #27272b;
+  --editor-surface-hover: #3a3a40;
+  --editor-border: #3a3a40;
   --editor-text: #ffffff;
-  --editor-text-secondary: #a3a3a3;
-  --editor-accent: #6366f1;
-  --editor-accent-hover: #4f46e5;
+  --editor-text-secondary: #8e8e96;
+  --editor-accent: #e74c6f;
+  --editor-accent-hover: #d43d60;
   --editor-danger: #ef4444;
-  --canvas-bg: #e5e7eb;
+  --canvas-bg: #e8e8ec;
   --canvas-paper: #ffffff;
-  --canvas-selection: #3b82f6;
+  --canvas-selection: #e74c6f;
 }
 
 body {
