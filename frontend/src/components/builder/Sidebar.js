@@ -154,18 +154,16 @@ function SidebarDraggableItem({ item }) {
       const template = SECTION_TEMPLATES[item.type];
       if (template) {
         const genId = () => Math.random().toString(36).substring(2, 11);
-        const newSection = {
+        const section = {
           id: genId(),
           ...template,
           elements: template.elements.map(e => ({ ...e, id: genId() }))
         };
         dispatch({
           type: 'ADD_SECTION',
+          section,
           afterIndex: state.page.sections.length > 0 ? state.page.sections.length - 1 : undefined
         });
-        // Replace the empty section just added with the template
-        const sections = [...state.page.sections, newSection];
-        dispatch({ type: 'SET_PAGE', payload: { ...state.page, sections } });
       }
       return;
     }
