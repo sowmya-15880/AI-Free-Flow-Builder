@@ -91,12 +91,13 @@ const builderReducer = (state, action) => {
     }
 
     case 'ADD_SECTION': {
-      const newSection = {
+      const newSection = action.section || {
         id: generateId(),
         type: 'custom',
         style: { backgroundColor: '#ffffff', padding: '60px 20px' },
         elements: []
       };
+      if (!newSection.id) newSection.id = generateId();
       const idx = action.afterIndex !== undefined ? action.afterIndex + 1 : state.page.sections.length;
       const sections = [...state.page.sections];
       sections.splice(idx, 0, newSection);
