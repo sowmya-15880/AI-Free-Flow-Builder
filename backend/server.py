@@ -20,16 +20,50 @@ db = client[os.environ['DB_NAME']]
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
-STOCK_IMAGES = [
-    "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&q=80",
-    "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800&q=80",
-    "https://images.unsplash.com/photo-1553877522-43269d4ea984?w=800&q=80",
-    "https://images.unsplash.com/photo-1551434678-e076c223a692?w=800&q=80",
-    "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=800&q=80",
-    "https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=800&q=80",
-    "https://images.unsplash.com/photo-1552664730-d307ca884978?w=800&q=80",
-    "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=800&q=80",
-]
+STOCK_IMAGES_BY_CATEGORY = {
+    "technology": [
+        "https://images.pexels.com/photos/7414218/pexels-photo-7414218.jpeg?auto=compress&cs=tinysrgb&w=800",
+        "https://images.pexels.com/photos/7679642/pexels-photo-7679642.jpeg?auto=compress&cs=tinysrgb&w=800",
+        "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=800&q=80",
+        "https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=800&q=80",
+    ],
+    "food": [
+        "https://images.unsplash.com/photo-1762922425226-8cfe6987e7b0?w=800&q=80",
+        "https://images.unsplash.com/photo-1544148103-0773bf10d330?w=800&q=80",
+        "https://images.unsplash.com/photo-1667388968900-4dc428fedb8c?w=800&q=80",
+        "https://images.unsplash.com/photo-1667388968964-4aa652df0a9b?w=800&q=80",
+    ],
+    "fitness": [
+        "https://images.unsplash.com/photo-1666979290090-dde24b4614bb?w=800&q=80",
+        "https://images.unsplash.com/photo-1666979289446-6e9ebb257091?w=800&q=80",
+        "https://images.pexels.com/photos/12250460/pexels-photo-12250460.jpeg?auto=compress&cs=tinysrgb&w=800",
+        "https://images.pexels.com/photos/3768730/pexels-photo-3768730.jpeg?auto=compress&cs=tinysrgb&w=800",
+    ],
+    "realestate": [
+        "https://images.unsplash.com/photo-1758551472051-168a35343bef?w=800&q=80",
+        "https://images.pexels.com/photos/7641856/pexels-photo-7641856.jpeg?auto=compress&cs=tinysrgb&w=800",
+        "https://images.unsplash.com/photo-1762195804027-04a19d9d3ab6?w=800&q=80",
+        "https://images.unsplash.com/photo-1737233479849-f924c595dd6f?w=800&q=80",
+    ],
+    "business": [
+        "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&q=80",
+        "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800&q=80",
+        "https://images.unsplash.com/photo-1552664730-d307ca884978?w=800&q=80",
+        "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=800&q=80",
+    ],
+    "creative": [
+        "https://images.pexels.com/photos/1181346/pexels-photo-1181346.jpeg?auto=compress&cs=tinysrgb&w=800",
+        "https://images.pexels.com/photos/6224/hands-people-woman-working.jpg?auto=compress&cs=tinysrgb&w=800",
+        "https://images.unsplash.com/photo-1553877522-43269d4ea984?w=800&q=80",
+        "https://images.unsplash.com/photo-1551434678-e076c223a692?w=800&q=80",
+    ],
+    "education": [
+        "https://images.unsplash.com/photo-1759922378123-a1f4f1e39bae?w=800&q=80",
+        "https://images.unsplash.com/photo-1758270704384-9df36d94a29d?w=800&q=80",
+        "https://images.pexels.com/photos/3231359/pexels-photo-3231359.jpeg?auto=compress&cs=tinysrgb&w=800",
+        "https://images.pexels.com/photos/8423012/pexels-photo-8423012.jpeg?auto=compress&cs=tinysrgb&w=800",
+    ],
+}
 
 
 class GeneratePageRequest(BaseModel):
