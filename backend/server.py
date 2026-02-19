@@ -38,6 +38,9 @@ class GeneratePageRequest(BaseModel):
 
 @api_router.post("/generate-page")
 async def generate_page(request: GeneratePageRequest):
+    if not request.prompt or not request.prompt.strip():
+        raise HTTPException(status_code=400, detail="Prompt cannot be empty")
+
     from emergentintegrations.llm.chat import LlmChat, UserMessage
 
     api_key = os.environ.get('EMERGENT_LLM_KEY')
