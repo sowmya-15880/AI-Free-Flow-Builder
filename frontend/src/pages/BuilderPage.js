@@ -11,21 +11,14 @@ import { Type, Image, MousePointer2, FormInput, Star, LayoutGrid } from 'lucide-
 const ELEMENT_ICONS = {
   heading: Type, paragraph: Type, image: Image, button: MousePointer2,
   form: FormInput, icon: Star, popup: MousePointer2, gallery: LayoutGrid,
-  divider: Type, spacer: Type,
-};
-
-const ELEMENT_LABELS = {
-  heading: 'Heading', paragraph: 'Paragraph', image: 'Image', button: 'Button',
-  form: 'Form', icon: 'Icon', popup: 'Popup', gallery: 'Gallery',
-  divider: 'Divider', spacer: 'Spacer',
 };
 
 function DragPreviewBox({ elementType }) {
   const Icon = ELEMENT_ICONS[elementType] || Type;
   return (
     <div className="drag-preview">
-      <Icon size={16} />
-      {ELEMENT_LABELS[elementType] || elementType}
+      <Icon size={14} />
+      {elementType}
     </div>
   );
 }
@@ -34,6 +27,7 @@ function BuilderInner() {
   const { state, dispatch } = useBuilder();
   const [activeDrag, setActiveDrag] = useState(null);
   const [device, setDevice] = useState('desktop');
+  const [activePanel, setActivePanel] = useState(null);
   const navigate = useNavigate();
 
   const sensors = useSensors(
@@ -45,38 +39,31 @@ function BuilderInner() {
     if (stored) {
       try {
         const pageData = JSON.parse(stored);
-        // Ensure all sections and elements have IDs
-        const ensureIds = (page) => {
-          const genId = () => Math.random().toString(36).substring(2, 11);
-          return {
-            ...page,
-            sections: (page.sections || []).map(s => ({
-              ...s,
-              id: s.id || genId(),
-              elements: (s.elements || []).map(e => ({ ...e, id: e.id || genId() }))
-            }))
-          };
+        const genId = () => Math.random().toString(36).substring(2, 11);
+        const ensured = {
+          ...pageData,
+          sections: (pageData.sections || []).map(s => ({
+            ...s,
+            id: s.id || genId(),
+            elements: (s.elements || []).map(e => ({ ...e, id: e.id || genId() }))
+          }))
         };
-        dispatch({ type: 'SET_PAGE', payload: ensureIds(pageData) });
+        dispatch({ type: 'SET_PAGE', payload: ensured });
       } catch (e) {
         console.error('Failed to parse stored page:', e);
       }
     }
   }, [dispatch]);
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyboard = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
         e.preventDefault();
-        if (e.shiftKey) {
-          dispatch({ type: 'REDO' });
-        } else {
-          dispatch({ type: 'UNDO' });
-        }
+        dispatch({ type: e.shiftKey ? 'REDO' : 'UNDO' });
       }
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (state.selectedElementId && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && state.selectedElementId) {
+        const tag = document.activeElement?.tagName;
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
           e.preventDefault();
           dispatch({ type: 'REMOVE_ELEMENT', elementId: state.selectedElementId });
         }
@@ -101,19 +88,13 @@ function BuilderInner() {
     const activeData = active.data.current;
     const overData = over.data.current;
 
-    // Sidebar item dropped on section or element
     if (activeData?.origin === 'sidebar') {
       let sectionId = overData?.sectionId;
       if (overData?.type === 'section') sectionId = overData.sectionId;
       if (overData?.type === 'canvas') {
-        // Dropped on empty canvas - add section with element
         const sections = state.page.sections;
-        if (sections.length > 0) {
-          sectionId = sections[sections.length - 1].id;
-        } else {
-          dispatch({ type: 'ADD_SECTION' });
-          return;
-        }
+        sectionId = sections.length > 0 ? sections[sections.length - 1].id : null;
+        if (!sectionId) { dispatch({ type: 'ADD_SECTION' }); return; }
       }
       if (sectionId) {
         dispatch({ type: 'ADD_ELEMENT', sectionId, elementType: activeData.elementType });
@@ -121,7 +102,6 @@ function BuilderInner() {
       return;
     }
 
-    // Element reorder within a section
     if (activeData?.type === 'element' && overData?.type === 'element') {
       if (activeData.sectionId === overData.sectionId && active.id !== over.id) {
         const section = state.page.sections.find(s => s.id === activeData.sectionId);
@@ -133,13 +113,11 @@ function BuilderInner() {
           }
         }
       } else if (activeData.sectionId !== overData.sectionId) {
-        // Move element to a different section
         dispatch({ type: 'MOVE_ELEMENT', elementId: active.id, toSectionId: overData.sectionId });
       }
       return;
     }
 
-    // Element dropped on section (move to that section)
     if (activeData?.type === 'element' && overData?.type === 'section') {
       if (activeData.sectionId !== overData.sectionId) {
         dispatch({ type: 'MOVE_ELEMENT', elementId: active.id, toSectionId: overData.sectionId });
@@ -147,7 +125,7 @@ function BuilderInner() {
     }
   }, [state.page.sections, dispatch]);
 
-  const hasProperties = !!state.selectedElementId || !!state.selectedSectionId;
+  const showProperties = !!state.selectedElementId || !!state.selectedSectionId;
 
   return (
     <DndContext
@@ -156,11 +134,13 @@ function BuilderInner() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className={`builder-layout ${hasProperties ? 'has-properties' : ''}`} data-testid="builder-layout">
+      <div className="builder-layout" data-testid="builder-layout">
         <Toolbar device={device} setDevice={setDevice} onBack={() => navigate('/')} />
-        <Sidebar />
-        <Canvas device={device} />
-        {hasProperties && <PropertiesPanel />}
+        <div className="builder-body">
+          <Sidebar activePanel={activePanel} setActivePanel={setActivePanel} />
+          <Canvas device={device} />
+          {showProperties && <PropertiesPanel />}
+        </div>
       </div>
       <DragOverlay dropAnimation={null}>
         {activeDrag?.origin === 'sidebar' && <DragPreviewBox elementType={activeDrag.elementType} />}
