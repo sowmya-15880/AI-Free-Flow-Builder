@@ -2,78 +2,20 @@ import { useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { useBuilder } from '@/context/BuilderContext';
 import {
-  Search, ChevronDown, ChevronRight,
+  Search, ChevronDown, ChevronRight, X,
   Type, AlignLeft, Image, MousePointer2, FormInput,
   Star, MessageSquare, LayoutGrid, Minus, MoveVertical,
-  Layout, Columns, Users, BarChart3, Megaphone, PanelBottom
+  Layout, Columns, Users, BarChart3, Megaphone, PanelBottom,
+  Layers, AppWindow, ShoppingCart, Video
 } from 'lucide-react';
 
-const ELEMENT_CATEGORIES = [
-  {
-    id: 'sections',
-    label: 'Sections',
-    icon: Layout,
-    items: [
-      { type: 'section-hero', label: 'Hero', icon: Layout },
-      { type: 'section-features', label: 'Features', icon: Columns },
-      { type: 'section-team', label: 'Team', icon: Users },
-      { type: 'section-stats', label: 'Stats', icon: BarChart3 },
-      { type: 'section-cta', label: 'CTA', icon: Megaphone },
-      { type: 'section-footer', label: 'Footer', icon: PanelBottom },
-    ]
-  },
-  {
-    id: 'text',
-    label: 'Text',
-    icon: Type,
-    items: [
-      { type: 'heading', label: 'Heading', icon: Type },
-      { type: 'paragraph', label: 'Paragraph', icon: AlignLeft },
-    ]
-  },
-  {
-    id: 'buttons',
-    label: 'Buttons',
-    icon: MousePointer2,
-    items: [
-      { type: 'button', label: 'Button', icon: MousePointer2 },
-    ]
-  },
-  {
-    id: 'media',
-    label: 'Images',
-    icon: Image,
-    items: [
-      { type: 'image', label: 'Image', icon: Image },
-      { type: 'gallery', label: 'Gallery', icon: LayoutGrid },
-    ]
-  },
-  {
-    id: 'forms',
-    label: 'Forms',
-    icon: FormInput,
-    items: [
-      { type: 'form', label: 'Form', icon: FormInput },
-    ]
-  },
-  {
-    id: 'popups',
-    label: 'Popups',
-    icon: MessageSquare,
-    items: [
-      { type: 'popup', label: 'Popup', icon: MessageSquare },
-    ]
-  },
-  {
-    id: 'other',
-    label: 'Layout',
-    icon: Minus,
-    items: [
-      { type: 'icon', label: 'Icon', icon: Star },
-      { type: 'divider', label: 'Divider', icon: Minus },
-      { type: 'spacer', label: 'Spacer', icon: MoveVertical },
-    ]
-  },
+const ICON_STRIP_ITEMS = [
+  { id: 'sections', label: 'Sections', icon: Layout },
+  { id: 'elements', label: 'Elements', icon: Layers },
+  { id: 'media', label: 'Media', icon: Image },
+  { id: 'popups', label: 'Popups', icon: MessageSquare },
+  { id: 'forms', label: 'Forms', icon: FormInput },
+  { id: 'apps', label: 'Apps', icon: AppWindow },
 ];
 
 const SECTION_TEMPLATES = {
@@ -83,7 +25,7 @@ const SECTION_TEMPLATES = {
     elements: [
       { type: 'heading', content: 'Welcome to Our Platform', style: { fontSize: '48px', fontWeight: '800', color: '#ffffff', textAlign: 'center', padding: '8px 16px' } },
       { type: 'paragraph', content: 'The all-in-one solution for your business needs. Start building something amazing today.', style: { fontSize: '18px', color: '#94a3b8', textAlign: 'center', padding: '8px 16px', maxWidth: '600px', margin: '0 auto', lineHeight: '1.7' } },
-      { type: 'button', content: 'Get Started Free', style: { backgroundColor: '#6366f1', color: '#ffffff', padding: '16px 36px', borderRadius: '8px', fontSize: '16px', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'inline-block', margin: '16px auto', textAlign: 'center' } },
+      { type: 'button', content: 'Get Started Free', style: { backgroundColor: '#e74c6f', color: '#ffffff', padding: '16px 36px', borderRadius: '8px', fontSize: '16px', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'inline-block', margin: '16px auto', textAlign: 'center' } },
       { type: 'image', content: { src: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&q=80', alt: 'Hero image' }, style: { width: '100%', maxWidth: '800px', borderRadius: '12px', margin: '24px auto 0', display: 'block' } },
     ]
   },
@@ -93,7 +35,6 @@ const SECTION_TEMPLATES = {
     elements: [
       { type: 'heading', content: 'Our Features', style: { fontSize: '36px', fontWeight: '700', color: '#1a1a1a', textAlign: 'center', padding: '8px 16px' } },
       { type: 'paragraph', content: 'Everything you need to succeed in one powerful platform.', style: { fontSize: '17px', color: '#6b7280', textAlign: 'center', padding: '8px 16px', maxWidth: '500px', margin: '0 auto', lineHeight: '1.6' } },
-      { type: 'image', content: { src: 'https://images.unsplash.com/photo-1553877522-43269d4ea984?w=800&q=80', alt: 'Features' }, style: { width: '100%', maxWidth: '700px', borderRadius: '12px', margin: '24px auto 0', display: 'block' } },
     ]
   },
   'section-team': {
@@ -102,28 +43,14 @@ const SECTION_TEMPLATES = {
     elements: [
       { type: 'heading', content: 'Meet Our Team', style: { fontSize: '36px', fontWeight: '700', color: '#1a1a1a', textAlign: 'center', padding: '8px 16px' } },
       { type: 'paragraph', content: 'The talented people behind our success.', style: { fontSize: '17px', color: '#6b7280', textAlign: 'center', padding: '8px 16px', lineHeight: '1.6' } },
-      { type: 'gallery', content: { images: [
-        { src: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=400&q=80', alt: 'Team 1' },
-        { src: 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=400&q=80', alt: 'Team 2' },
-        { src: 'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=400&q=80', alt: 'Team 3' },
-      ]}, style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', padding: '24px 16px', maxWidth: '800px', margin: '0 auto' } },
-    ]
-  },
-  'section-stats': {
-    type: 'stats',
-    style: { backgroundColor: '#1e293b', padding: '60px 20px', textAlign: 'center' },
-    elements: [
-      { type: 'heading', content: 'Trusted by Thousands', style: { fontSize: '36px', fontWeight: '700', color: '#ffffff', textAlign: 'center', padding: '8px 16px' } },
-      { type: 'paragraph', content: '10,000+ businesses use our platform to grow.', style: { fontSize: '17px', color: '#94a3b8', textAlign: 'center', padding: '8px 16px', lineHeight: '1.6' } },
     ]
   },
   'section-cta': {
     type: 'cta',
-    style: { backgroundColor: '#6366f1', padding: '80px 20px', textAlign: 'center' },
+    style: { backgroundColor: '#e74c6f', padding: '80px 20px', textAlign: 'center' },
     elements: [
       { type: 'heading', content: 'Ready to Get Started?', style: { fontSize: '40px', fontWeight: '700', color: '#ffffff', textAlign: 'center', padding: '8px 16px' } },
-      { type: 'paragraph', content: 'Join thousands of businesses already using our platform.', style: { fontSize: '17px', color: '#e0e7ff', textAlign: 'center', padding: '8px 16px', lineHeight: '1.6' } },
-      { type: 'button', content: 'Start Free Trial', style: { backgroundColor: '#ffffff', color: '#6366f1', padding: '16px 36px', borderRadius: '8px', fontSize: '16px', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'inline-block', margin: '16px auto' } },
+      { type: 'button', content: 'Start Free Trial', style: { backgroundColor: '#ffffff', color: '#e74c6f', padding: '16px 36px', borderRadius: '8px', fontSize: '16px', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'inline-block', margin: '16px auto' } },
     ]
   },
   'section-footer': {
@@ -135,17 +62,84 @@ const SECTION_TEMPLATES = {
   },
 };
 
-function SidebarDraggableItem({ item }) {
+const PANEL_CONTENT = {
+  sections: {
+    title: 'Sections',
+    categories: [
+      {
+        id: 'section-templates',
+        label: 'Templates',
+        items: [
+          { type: 'section-hero', label: 'Hero', icon: Layout },
+          { type: 'section-features', label: 'Features', icon: Columns },
+          { type: 'section-team', label: 'Team', icon: Users },
+          { type: 'section-cta', label: 'CTA', icon: Megaphone },
+          { type: 'section-footer', label: 'Footer', icon: PanelBottom },
+        ]
+      }
+    ]
+  },
+  elements: {
+    title: 'Elements',
+    categories: [
+      { id: 'text', label: 'Text', items: [
+        { type: 'heading', label: 'Heading', icon: Type },
+        { type: 'paragraph', label: 'Paragraph', icon: AlignLeft },
+      ]},
+      { id: 'buttons', label: 'Buttons', items: [
+        { type: 'button', label: 'Button', icon: MousePointer2 },
+      ]},
+      { id: 'images', label: 'Images', items: [
+        { type: 'image', label: 'Image', icon: Image },
+        { type: 'gallery', label: 'Gallery', icon: LayoutGrid },
+      ]},
+      { id: 'icons', label: 'Icons', items: [
+        { type: 'icon', label: 'Icon', icon: Star },
+      ]},
+      { id: 'layout', label: 'Layout', items: [
+        { type: 'divider', label: 'Divider', icon: Minus },
+        { type: 'spacer', label: 'Spacer', icon: MoveVertical },
+      ]},
+    ]
+  },
+  media: {
+    title: 'Media',
+    categories: [
+      { id: 'media-items', label: 'Media', items: [
+        { type: 'image', label: 'Image', icon: Image },
+        { type: 'gallery', label: 'Gallery', icon: LayoutGrid },
+      ]},
+    ]
+  },
+  popups: {
+    title: 'Popups',
+    categories: [
+      { id: 'popup-items', label: 'Popups', items: [
+        { type: 'popup', label: 'Popup', icon: MessageSquare },
+      ]},
+    ]
+  },
+  forms: {
+    title: 'Forms',
+    categories: [
+      { id: 'form-items', label: 'Forms', items: [
+        { type: 'form', label: 'Form', icon: FormInput },
+      ]},
+    ]
+  },
+  apps: {
+    title: 'Apps',
+    categories: [],
+  },
+};
+
+function DraggableItem({ item }) {
   const { state, dispatch } = useBuilder();
   const isSection = item.type.startsWith('section-');
 
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `sidebar-${item.type}-${Date.now()}`,
-    data: {
-      origin: 'sidebar',
-      elementType: isSection ? null : item.type,
-      sectionTemplate: isSection ? item.type : null,
-    },
+    id: `sidebar-${item.type}-${Math.random().toString(36).substr(2, 5)}`,
+    data: { origin: 'sidebar', elementType: isSection ? null : item.type },
     disabled: isSection,
   });
 
@@ -155,106 +149,112 @@ function SidebarDraggableItem({ item }) {
       if (template) {
         const genId = () => Math.random().toString(36).substring(2, 11);
         const section = {
-          id: genId(),
-          ...template,
+          id: genId(), ...template,
           elements: template.elements.map(e => ({ ...e, id: genId() }))
         };
-        dispatch({
-          type: 'ADD_SECTION',
-          section,
+        dispatch({ type: 'ADD_SECTION', section,
           afterIndex: state.page.sections.length > 0 ? state.page.sections.length - 1 : undefined
         });
       }
       return;
     }
-
-    // Add element to selected section or first section
-    const targetSectionId = state.selectedSectionId || state.page.sections[0]?.id;
-    if (targetSectionId) {
-      dispatch({ type: 'ADD_ELEMENT', sectionId: targetSectionId, elementType: item.type });
+    const targetId = state.selectedSectionId || state.page.sections[0]?.id;
+    if (targetId) {
+      dispatch({ type: 'ADD_ELEMENT', sectionId: targetId, elementType: item.type });
     } else {
-      // No sections exist, create one first then add element
       dispatch({ type: 'ADD_SECTION' });
     }
   };
 
   const Icon = item.icon;
-
   return (
     <div
       ref={!isSection ? setNodeRef : undefined}
-      className={`sidebar-item ${isDragging ? 'is-dragging' : ''}`}
+      className={`ep-item ${isDragging ? 'opacity-40' : ''}`}
       onClick={handleClick}
       data-testid={`sidebar-item-${item.type}`}
       {...(!isSection ? { ...attributes, ...listeners } : {})}
     >
-      <Icon size={20} className="sidebar-item-icon" />
-      <span className="sidebar-item-label">{item.label}</span>
+      <Icon size={18} className="ep-item-icon" />
+      <span className="ep-item-label">{item.label}</span>
     </div>
   );
 }
 
-export default function Sidebar() {
-  const [openCategories, setOpenCategories] = useState(['text', 'sections']);
+function ElementsSubPanel({ panelId, onClose }) {
+  const [openCats, setOpenCats] = useState(() => {
+    const content = PANEL_CONTENT[panelId];
+    return content?.categories?.map(c => c.id) || [];
+  });
   const [search, setSearch] = useState('');
+  const content = PANEL_CONTENT[panelId];
+  if (!content) return null;
 
-  const toggleCategory = (id) => {
-    setOpenCategories(prev =>
-      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
-    );
+  const toggleCat = (id) => {
+    setOpenCats(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
   };
 
-  const filteredCategories = ELEMENT_CATEGORIES.map(cat => ({
-    ...cat,
-    items: cat.items.filter(item =>
-      item.label.toLowerCase().includes(search.toLowerCase())
-    )
-  })).filter(cat => cat.items.length > 0);
+  const filtered = content.categories
+    .map(cat => ({ ...cat, items: cat.items.filter(i => i.label.toLowerCase().includes(search.toLowerCase())) }))
+    .filter(cat => cat.items.length > 0);
 
   return (
-    <div className="builder-sidebar" data-testid="builder-sidebar">
-      <div className="sidebar-header">
-        <div className="sidebar-search-wrapper">
-          <Search size={14} className="sidebar-search-icon" />
-          <input
-            className="sidebar-search"
-            placeholder="Search elements..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            data-testid="sidebar-search"
-          />
-        </div>
+    <div className="elements-panel" data-testid="elements-panel">
+      <div className="elements-panel-header">
+        <span className="elements-panel-title">{content.title}</span>
+        <button className="elements-panel-close" onClick={onClose} data-testid="elements-panel-close">
+          <X size={16} />
+        </button>
       </div>
-
-      <div className="sidebar-categories">
-        {filteredCategories.map(cat => (
-          <div key={cat.id} className="sidebar-category">
-            <div
-              className="sidebar-category-header"
-              onClick={() => toggleCategory(cat.id)}
-              data-testid={`sidebar-category-${cat.id}`}
-            >
-              <div className="sidebar-category-title">
-                <cat.icon size={14} className="sidebar-category-icon" />
-                {cat.label}
-              </div>
-              {openCategories.includes(cat.id) ? (
-                <ChevronDown size={14} style={{ color: 'var(--editor-text-secondary)' }} />
-              ) : (
-                <ChevronRight size={14} style={{ color: 'var(--editor-text-secondary)' }} />
-              )}
-            </div>
-
-            {openCategories.includes(cat.id) && (
-              <div className="sidebar-items">
-                {cat.items.map(item => (
-                  <SidebarDraggableItem key={item.type} item={item} />
-                ))}
-              </div>
-            )}
+      <div className="ep-search-wrapper">
+        <Search size={13} className="ep-search-icon" />
+        <input className="elements-panel-search" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} data-testid="sidebar-search" />
+      </div>
+      {filtered.length === 0 && (
+        <div style={{ padding: 20, textAlign: 'center', color: '#8e8e96', fontSize: 13 }}>
+          {content.categories.length === 0 ? 'Coming soon' : 'No results'}
+        </div>
+      )}
+      {filtered.map(cat => (
+        <div key={cat.id} className="ep-category">
+          <div className="ep-category-header" onClick={() => toggleCat(cat.id)} data-testid={`sidebar-category-${cat.id}`}>
+            <span className="ep-category-title">{cat.label}</span>
+            {openCats.includes(cat.id) ? <ChevronDown size={13} style={{ color: '#8e8e96' }} /> : <ChevronRight size={13} style={{ color: '#8e8e96' }} />}
           </div>
+          {openCats.includes(cat.id) && (
+            <div className="ep-items">
+              {cat.items.map(item => <DraggableItem key={item.type} item={item} />)}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function Sidebar({ activePanel, setActivePanel }) {
+  const togglePanel = (id) => {
+    setActivePanel(prev => prev === id ? null : id);
+  };
+
+  return (
+    <>
+      <div className="icon-strip" data-testid="builder-sidebar">
+        {ICON_STRIP_ITEMS.map(item => (
+          <button
+            key={item.id}
+            className={`icon-strip-btn ${activePanel === item.id ? 'active' : ''}`}
+            onClick={() => togglePanel(item.id)}
+            data-testid={`icon-strip-${item.id}`}
+          >
+            <item.icon size={18} />
+            <span className="icon-label">{item.label}</span>
+          </button>
         ))}
       </div>
-    </div>
+      {activePanel && (
+        <ElementsSubPanel panelId={activePanel} onClose={() => setActivePanel(null)} />
+      )}
+    </>
   );
 }
