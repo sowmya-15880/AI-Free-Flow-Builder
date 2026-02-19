@@ -253,7 +253,7 @@ export default function Sidebar({ activePanel, setActivePanel }) {
         ))}
       </div>
       {activePanel && (
-        <ElementsSubPanel panelId={activePanel} onClose={() => setActivePanel(null)} />
+        <ElementsSubPanel key={activePanel} panelId={activePanel} onClose={() => setActivePanel(null)} />
       )}
     </>
   );
