@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Wand2, ArrowRight, Loader2 } from 'lucide-react';
+import { Sparkles, Wand2, ArrowRight } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
 
