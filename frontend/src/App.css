@@ -77,6 +77,45 @@
   max-width: 540px;
 }
 
+.prompt-import-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 16px 0;
+  flex-wrap: wrap;
+}
+
+.prompt-import-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(231, 76, 111, 0.28);
+  background: rgba(231, 76, 111, 0.08);
+  color: #f4f4f5;
+  font-family: 'Manrope', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.prompt-import-btn:hover {
+  background: rgba(231, 76, 111, 0.14);
+  border-color: rgba(231, 76, 111, 0.42);
+}
+
+.prompt-import-note {
+  color: #8e8e96;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.prompt-file-input {
+  display: none;
+}
+
 .prompt-input-wrapper {
   position: relative;
   margin-bottom: 12px;
@@ -235,6 +274,10 @@
   .prompt-content {
     max-height: calc(100vh - 24px);
     max-height: calc(100dvh - 24px);
+  }
+
+  .prompt-import-bar {
+    align-items: flex-start;
   }
 
   .prompt-form-grid {

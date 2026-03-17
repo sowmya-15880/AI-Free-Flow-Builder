@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Wand2, ArrowRight } from 'lucide-react';
+import { Sparkles, Wand2, ArrowRight, Upload } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
+import { importLandingPageJson } from '@/utils/importPageJson';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -92,6 +93,8 @@ export default function PromptPage() {
   const [productDescription, setProductDescription] = useState(PAGE_TYPE_OPTIONS[0].productDescription);
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState('');
+  const fileInputRef = useRef(null);
   const navigate = useNavigate();
 
   const applyTypeDefaults = (typeValue) => {
@@ -145,6 +148,32 @@ export default function PromptPage() {
     }
   };
 
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleJsonUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setLoading(true);
+    try {
+      const fileText = await file.text();
+      const raw = JSON.parse(fileText);
+      const importedPage = importLandingPageJson(raw);
+      sessionStorage.setItem('builderPage', JSON.stringify(importedPage));
+      setUploadedFileName(file.name);
+      toast.success('JSON imported into builder successfully.');
+      navigate('/builder');
+    } catch (error) {
+      console.error(error);
+      toast.error(error.message || 'Failed to import JSON file.');
+    } finally {
+      event.target.value = '';
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="prompt-page" data-testid="prompt-page">
       <div className="prompt-content">
@@ -162,6 +191,23 @@ export default function PromptPage() {
           Describe your perfect landing page and watch it come to life.
           Edit every element, drag to reorder, and publish when ready.
         </p>
+
+        <div className="prompt-import-bar">
+          <button type="button" className="prompt-import-btn" onClick={handleUploadClick}>
+            <Upload size={16} />
+            Upload Landing Page JSON
+          </button>
+          <span className="prompt-import-note">
+            {uploadedFileName ? `Imported: ${uploadedFileName}` : 'Supports builder JSON and structured landing page JSON files'}
+          </span>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="prompt-file-input"
+            onChange={handleJsonUpload}
+          />
+        </div>
 
         {loading ? (
           <div className="prompt-loading" data-testid="prompt-loading">

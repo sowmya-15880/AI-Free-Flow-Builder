@@ -1,0 +1,415 @@
+const GRID = 8;
+const PAGE_WIDTH = 1120;
+const SECTION_SIDE_PADDING = 32;
+
+const snap = (value) => Math.max(0, Math.round((Number(value) || 0) / GRID) * GRID);
+const makeId = (prefix = 'imp') => `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+
+const decodeHtml = (value) => {
+  if (!value) return '';
+  const text = String(value)
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&#39;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/\u200b/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s+/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return text;
+};
+
+const toPx = (value, fallback = 0) => {
+  if (value === undefined || value === null || value === '') return fallback;
+  const parsed = parseFloat(String(value).replace('px', ''));
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const getSpacingValue = (spacing, edge) => {
+  if (!spacing || typeof spacing !== 'object') return 0;
+  if (spacing.even && spacing.size !== undefined && spacing.size !== '') return toPx(spacing.size, 0);
+  return toPx(spacing[edge], 0);
+};
+
+const getPaddingShorthand = (spacing) => {
+  if (!spacing || typeof spacing !== 'object') return '48px 24px';
+  if (spacing.even && spacing.size !== undefined && spacing.size !== '') {
+    const size = toPx(spacing.size, 0);
+    return `${size}px`;
+  }
+  const top = getSpacingValue(spacing, 'top');
+  const right = getSpacingValue(spacing, 'right');
+  const bottom = getSpacingValue(spacing, 'bottom');
+  const left = getSpacingValue(spacing, 'left');
+  if (!top && !right && !bottom && !left) return '48px 24px';
+  return `${top || 0}px ${right || 0}px ${bottom || 0}px ${left || 0}px`;
+};
+
+const parseRatioList = (ratio, count) => {
+  if (!ratio || typeof ratio !== 'string') return Array.from({ length: count }, () => 1);
+  const parts = ratio.split(':').map((part) => parseFloat(part) || 1);
+  if (parts.length !== count) return Array.from({ length: count }, () => 1);
+  return parts;
+};
+
+const getNodeSpacing = (node) => {
+  const element = node?.element || {};
+  return element.spacing || {};
+};
+
+const estimateElementHeight = (element) => {
+  if (!element) return 80;
+  switch (element.type) {
+    case 'heading': {
+      const fontSize = toPx(element.style?.fontSize, 36);
+      const lineHeight = parseFloat(element.style?.lineHeight || '1.2') || 1.2;
+      const chars = String(element.content || '').length;
+      const approxLines = Math.max(1, Math.ceil(chars / 28));
+      return Math.max(64, Math.ceil(fontSize * lineHeight * approxLines) + 12);
+    }
+    case 'paragraph': {
+      const fontSize = toPx(element.style?.fontSize, 16);
+      const lineHeight = parseFloat(element.style?.lineHeight || '1.6') || 1.6;
+      const chars = String(element.content || '').length;
+      const approxLines = Math.max(1, Math.ceil(chars / 52));
+      return Math.max(48, Math.ceil(fontSize * lineHeight * approxLines) + 8);
+    }
+    case 'button':
+      return 56;
+    case 'image':
+      return Math.max(180, toPx(element.style?.height, toPx(element.style?.maxWidth, 280) * 0.68));
+    case 'form':
+      return 240;
+    case 'icon':
+      return 72;
+    case 'spacer':
+      return toPx(element.style?.height, 40);
+    default:
+      return 80;
+  }
+};
+
+const extractFontSize = (typography, fallback) => {
+  return `${toPx(typography?.font?.size, fallback)}px`;
+};
+
+const extractFontWeight = (typography, fallback = 600) => {
+  const value = typography?.font?.weight;
+  if (value === undefined || value === null || value === '') return fallback;
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : value;
+};
+
+const deriveSectionStyle = (sectionNode) => {
+  const element = sectionNode?.element || {};
+  const background = element.background || {};
+  const backgroundColor = background?.color?.background_color || '#ffffff';
+  const style = {
+    backgroundColor,
+    padding: getPaddingShorthand(element.spacing?.padding),
+  };
+  if (background.type === 'image' && background.image?.image_url) {
+    style.backgroundImage = `url(${background.image.image_url})`;
+    style.backgroundSize = background.image.image_size || 'cover';
+    style.backgroundPosition = (background.image.image_position || 'center').replace('-', ' ');
+    style.backgroundRepeat = 'no-repeat';
+  }
+  return style;
+};
+
+const mapLeafNode = (node, x, y, width) => {
+  const element = node.element || {};
+  const spacing = getNodeSpacing(node);
+  const marginTop = getSpacingValue(spacing.margin, 'top');
+  const marginBottom = getSpacingValue(spacing.margin, 'bottom');
+  const nextY = y + marginTop;
+  const baseStyle = {
+    textAlign: element.align || 'left',
+  };
+
+  if (node.type === 'heading') {
+    const content = decodeHtml(element.content || 'Imported heading');
+    const mapped = {
+      id: makeId('heading'),
+      type: 'heading',
+      content,
+      position: { x: snap(x), y: snap(nextY) },
+      style: {
+        ...baseStyle,
+        fontSize: extractFontSize(element.typography, 36),
+        fontWeight: extractFontWeight(element.typography, 700),
+        color: element.typography?.color || '#111827',
+        lineHeight: element.typography?.line_height || '1.2',
+        maxWidth: `${Math.max(240, width - 16)}px`,
+      },
+    };
+    return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 12 };
+  }
+
+  if (node.type === 'text') {
+    const content = decodeHtml(element.content || 'Imported text');
+    const mapped = {
+      id: makeId('paragraph'),
+      type: 'paragraph',
+      content,
+      position: { x: snap(x), y: snap(nextY) },
+      style: {
+        ...baseStyle,
+        fontSize: extractFontSize(element.typography, 16),
+        fontWeight: extractFontWeight(element.typography, 400),
+        color: element.typography?.color || '#4b5563',
+        lineHeight: element.typography?.line_height || '1.6',
+        maxWidth: `${Math.max(240, width - 16)}px`,
+      },
+    };
+    return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 10 };
+  }
+
+  if (node.type === 'button') {
+    const content = decodeHtml(element.content || 'Click Here');
+    const mapped = {
+      id: makeId('button'),
+      type: 'button',
+      content,
+      position: { x: snap(x), y: snap(nextY) },
+      style: {
+        backgroundColor: element.background?.color?.background_color || element.button_bg?.color || '#2563eb',
+        color: element.typography?.color || '#ffffff',
+        padding: '12px 24px',
+        borderRadius: `${toPx(element.border?.radius?.size, 12)}px`,
+        fontSize: extractFontSize(element.typography, 15),
+        fontWeight: extractFontWeight(element.typography, 700),
+        textAlign: element.align || 'center',
+        display: 'inline-block',
+      },
+    };
+    return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 10 };
+  }
+
+  if (node.type === 'image') {
+    const src = element.src || element.image_url || '';
+    if (!src) return { element: null, consumedHeight: 0 };
+    const maxWidth = Math.min(width - 16, toPx(element.desktop_width || element.width, width - 16) || (width - 16));
+    const mapped = {
+      id: makeId('image'),
+      type: 'image',
+      content: {
+        src,
+        alt: element.alt || 'Imported image',
+      },
+      position: { x: snap(x), y: snap(nextY) },
+      style: {
+        width: '100%',
+        maxWidth: `${Math.max(180, maxWidth)}px`,
+        borderRadius: element.style === 'circle' ? '999px' : `${toPx(element.border?.radius?.size, 12)}px`,
+        display: 'block',
+      },
+    };
+    return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 16 };
+  }
+
+  if (node.type === 'lpform') {
+    const mapped = {
+      id: makeId('form'),
+      type: 'form',
+      content: {
+        fields: [
+          { label: 'Name', type: 'text', placeholder: 'Enter your name' },
+          { label: 'Email', type: 'email', placeholder: 'Enter your email' },
+        ],
+        submitText: 'Submit',
+      },
+      position: { x: snap(x), y: snap(nextY) },
+      style: {
+        padding: '24px',
+        backgroundColor: element.input_bg?.color || '#ffffff',
+        borderRadius: `${toPx(element.input_border?.radius?.size, 16)}px`,
+        maxWidth: `${Math.max(280, width - 16)}px`,
+      },
+    };
+    return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 20 };
+  }
+
+  if (node.type === 'iconHeading') {
+    const content = decodeHtml(element.heading_content || 'Imported item');
+    const mapped = {
+      id: makeId('heading'),
+      type: 'heading',
+      content,
+      position: { x: snap(x), y: snap(nextY) },
+      style: {
+        ...baseStyle,
+        fontSize: extractFontSize(element.typography, 20),
+        fontWeight: extractFontWeight(element.typography, 600),
+        color: element.typography?.color || '#111827',
+        lineHeight: element.typography?.line_height || '1.35',
+        maxWidth: `${Math.max(180, width - 16)}px`,
+      },
+    };
+    return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 8 };
+  }
+
+  if (node.type === 'spacer') {
+    const height = toPx(element.height, 40);
+    const mapped = {
+      id: makeId('spacer'),
+      type: 'spacer',
+      content: '',
+      position: { x: snap(x), y: snap(nextY) },
+      style: { height: `${height}px`, width: '100%' },
+    };
+    return { element: mapped, consumedHeight: height + marginTop + marginBottom };
+  }
+
+  return { element: null, consumedHeight: 0 };
+};
+
+const convertGraphPage = (rawPage) => {
+  const elementsById = rawPage.elements || {};
+
+  const processNode = (nodeId, layout, acc) => {
+    const node = elementsById[nodeId];
+    if (!node) return 0;
+
+    if (node.type === 'row') {
+      const columns = node.columns || [];
+      const rowSpacing = getNodeSpacing(node);
+      const marginTop = getSpacingValue(rowSpacing.margin, 'top');
+      const marginBottom = getSpacingValue(rowSpacing.margin, 'bottom');
+      const paddingLeft = getSpacingValue(rowSpacing.padding, 'left');
+      const paddingRight = getSpacingValue(rowSpacing.padding, 'right');
+      const paddingTop = getSpacingValue(rowSpacing.padding, 'top');
+      const innerX = layout.x + paddingLeft;
+      const innerWidth = Math.max(260, layout.width - paddingLeft - paddingRight);
+      const ratios = parseRatioList(node.element?.column_ratio, columns.length);
+      const ratioSum = ratios.reduce((sum, value) => sum + value, 0) || columns.length || 1;
+      let offsetX = innerX;
+      let rowHeight = 0;
+
+      columns.forEach((columnId, index) => {
+        const columnWidth = Math.round((innerWidth * ratios[index]) / ratioSum);
+        const consumed = processNode(columnId, { x: offsetX, y: layout.y + marginTop + paddingTop, width: columnWidth }, acc);
+        rowHeight = Math.max(rowHeight, consumed);
+        offsetX += columnWidth;
+      });
+
+      return rowHeight + marginTop + marginBottom + paddingTop;
+    }
+
+    if (node.type === 'column' || node.type === 'box') {
+      const children = node.elements || [];
+      const spacing = getNodeSpacing(node);
+      const marginTop = getSpacingValue(spacing.margin, 'top');
+      const marginBottom = getSpacingValue(spacing.margin, 'bottom');
+      const paddingTop = getSpacingValue(spacing.padding, 'top');
+      const paddingBottom = getSpacingValue(spacing.padding, 'bottom');
+      const paddingLeft = getSpacingValue(spacing.padding, 'left');
+      const paddingRight = getSpacingValue(spacing.padding, 'right');
+      let cursorY = layout.y + marginTop + paddingTop;
+      const innerX = layout.x + paddingLeft;
+      const innerWidth = Math.max(220, layout.width - paddingLeft - paddingRight);
+
+      children.forEach((childId) => {
+        const childNode = elementsById[childId];
+        if (!childNode) return;
+        if (childNode.type === 'row' || childNode.type === 'column' || childNode.type === 'box') {
+          const consumed = processNode(childId, { x: innerX, y: cursorY, width: innerWidth }, acc);
+          cursorY += consumed + 12;
+          return;
+        }
+        const mapped = mapLeafNode(childNode, innerX, cursorY, innerWidth);
+        if (mapped.element) acc.push(mapped.element);
+        cursorY += mapped.consumedHeight || 0;
+      });
+
+      return Math.max(0, cursorY - layout.y + paddingBottom + marginBottom);
+    }
+
+    const mapped = mapLeafNode(node, layout.x, layout.y, layout.width);
+    if (mapped.element) acc.push(mapped.element);
+    return mapped.consumedHeight || 0;
+  };
+
+  const sections = (rawPage.sections || []).map((sectionId, sectionIndex) => {
+    const sectionNode = elementsById[sectionId];
+    if (!sectionNode) {
+      return {
+        id: makeId('section'),
+        type: 'custom',
+        style: { backgroundColor: '#ffffff', padding: '48px 24px' },
+        elements: [],
+      };
+    }
+
+    const importedElements = [];
+    const rows = sectionNode.rows || [];
+    let cursorY = 32;
+    const contentWidth = PAGE_WIDTH - (SECTION_SIDE_PADDING * 2);
+
+    rows.forEach((rowId) => {
+      const consumed = processNode(rowId, { x: SECTION_SIDE_PADDING, y: cursorY, width: contentWidth }, importedElements);
+      cursorY += consumed + 20;
+    });
+
+    return {
+      id: sectionNode.element?.section_id || sectionNode.elementId || makeId(`section-${sectionIndex + 1}`),
+      type: sectionNode.type || 'custom',
+      style: deriveSectionStyle(sectionNode),
+      elements: importedElements,
+    };
+  });
+
+  const firstHeading = sections
+    .flatMap((section) => section.elements)
+    .find((element) => element.type === 'heading' && element.content);
+
+  return {
+    title: decodeHtml(firstHeading?.content || rawPage.title || 'Imported Landing Page'),
+    sections,
+  };
+};
+
+const normalizeBuilderPage = (page) => {
+  const sections = (page.sections || []).map((section, sectionIndex) => ({
+    id: section.id || makeId(`section-${sectionIndex + 1}`),
+    type: section.type || 'custom',
+    style: section.style || { backgroundColor: '#ffffff', padding: '48px 24px' },
+    elements: (section.elements || []).map((element, elementIndex) => ({
+      ...element,
+      id: element.id || makeId(element.type || `element-${elementIndex + 1}`),
+      type: element.type === 'text' ? 'paragraph' : element.type,
+      position: element.position || { x: 24, y: 36 + (elementIndex * 120) },
+    })),
+  }));
+
+  return {
+    title: page.title || 'Imported Landing Page',
+    sections,
+  };
+};
+
+export const importLandingPageJson = (raw) => {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('Invalid JSON document.');
+  }
+
+  const page = raw.page && typeof raw.page === 'object' ? raw.page : raw;
+
+  if (Array.isArray(page.sections) && page.sections.every((section) => section && typeof section === 'object' && !Array.isArray(section))) {
+    return normalizeBuilderPage(page);
+  }
+
+  if (page.type === 'page' && Array.isArray(page.sections) && page.elements && typeof page.elements === 'object') {
+    return convertGraphPage(page);
+  }
+
+  throw new Error('Unsupported landing page JSON format.');
+};
