@@ -14,8 +14,9 @@ services:
       - key: USE_LOCAL_TEST_AGENT
         value: "true"
 
-  - type: static_site
+  - type: web
     name: ffb-frontend
+    runtime: static
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: build
