@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 
 class LandingPageBuilderAPITester:
-    def __init__(self, base_url="https://harmony-flow-5.preview.emergentagent.com/api"):
+    def __init__(self, base_url="http://127.0.0.1:8001/api"):
         self.base_url = base_url
         self.tests_run = 0
         self.tests_passed = 0
