@@ -1,14 +1,17 @@
 /* ============ PROMPT PAGE ============ */
 .prompt-page {
   min-height: 100vh;
+  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
   background: #1b1b1f;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 20px;
+  padding: 20px;
   position: relative;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .prompt-page::before {
@@ -28,6 +31,11 @@
   z-index: 1;
   max-width: 720px;
   width: 100%;
+  min-height: calc(100vh - 40px);
+  min-height: calc(100dvh - 40px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .prompt-badge {
@@ -41,17 +49,17 @@
   color: #e74c6f;
   font-size: 13px;
   font-weight: 500;
-  margin-bottom: 32px;
+  margin-bottom: 20px;
   letter-spacing: 0.02em;
 }
 
 .prompt-title {
   font-family: 'Manrope', sans-serif;
-  font-size: 52px;
+  font-size: clamp(42px, 5vw, 52px);
   font-weight: 800;
   color: #ffffff;
   line-height: 1.1;
-  margin: 0 0 16px 0;
+  margin: 0 0 12px 0;
   letter-spacing: -0.03em;
 }
 
@@ -60,29 +68,29 @@
 }
 
 .prompt-subtitle {
-  font-size: 17px;
+  font-size: 16px;
   color: #8e8e96;
   line-height: 1.6;
-  margin: 0 0 40px 0;
+  margin: 0 0 24px 0;
   max-width: 540px;
 }
 
 .prompt-input-wrapper {
   position: relative;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .prompt-form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  margin-bottom: 14px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .prompt-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .prompt-field-label {
@@ -90,13 +98,13 @@
   color: #c4c8d1;
   font-size: 13px;
   font-weight: 600;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .prompt-input,
 .prompt-select {
   width: 100%;
-  height: 42px;
+  height: 40px;
   padding: 0 12px;
   background: #27272b;
   border: 1px solid #3a3a40;
@@ -114,8 +122,8 @@
 
 .prompt-textarea {
   width: 100%;
-  min-height: 140px;
-  padding: 20px;
+  min-height: 116px;
+  padding: 16px 18px;
   background: #27272b;
   border: 1px solid #3a3a40;
   border-radius: 16px;
@@ -129,7 +137,7 @@
 }
 
 .prompt-textarea-sm {
-  min-height: 98px;
+  min-height: 84px;
 }
 
 .prompt-textarea:focus {
@@ -142,7 +150,7 @@
 
 .prompt-generate-btn {
   width: 100%;
-  padding: 16px 32px;
+  padding: 14px 28px;
   border-radius: 12px;
   background: #e74c6f;
   color: white;
@@ -218,6 +226,15 @@
 }
 
 @media (max-width: 860px) {
+  .prompt-page {
+    padding: 16px;
+  }
+
+  .prompt-content {
+    min-height: calc(100vh - 32px);
+    min-height: calc(100dvh - 32px);
+  }
+
   .prompt-form-grid {
     grid-template-columns: 1fr;
   }
