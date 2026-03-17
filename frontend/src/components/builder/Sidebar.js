@@ -5,8 +5,8 @@ import {
   Search, ChevronDown, ChevronRight, X,
   Type, AlignLeft, Image, MousePointer2, FormInput,
   Star, MessageSquare, LayoutGrid, Minus, MoveVertical,
-  Layout, Columns, Users, BarChart3, Megaphone, PanelBottom,
-  Layers, AppWindow, ShoppingCart, Video
+  Layout, Columns, Users, Megaphone, PanelBottom,
+  Layers, AppWindow, ShoppingCart
 } from 'lucide-react';
 
 const ICON_STRIP_ITEMS = [
@@ -16,6 +16,7 @@ const ICON_STRIP_ITEMS = [
   { id: 'popups', label: 'Popups', icon: MessageSquare },
   { id: 'forms', label: 'Forms', icon: FormInput },
   { id: 'apps', label: 'Apps', icon: AppWindow },
+  { id: 'ecommerce', label: 'E-Commerce', icon: ShoppingCart },
 ];
 
 const SECTION_TEMPLATES = {
@@ -131,6 +132,10 @@ const PANEL_CONTENT = {
     title: 'Apps',
     categories: [],
   },
+  ecommerce: {
+    title: 'E-Commerce',
+    categories: [],
+  },
 };
 
 function DraggableItem({ item }) {
@@ -138,7 +143,7 @@ function DraggableItem({ item }) {
   const isSection = item.type.startsWith('section-');
 
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `sidebar-${item.type}-${Math.random().toString(36).substr(2, 5)}`,
+    id: `sidebar-${item.type}`,
     data: { origin: 'sidebar', elementType: isSection ? null : item.type },
     disabled: isSection,
   });
@@ -238,7 +243,7 @@ export default function Sidebar({ activePanel, setActivePanel }) {
   };
 
   return (
-    <>
+    <div className={`builder-sidebar-shell ${activePanel ? 'is-open' : ''}`}>
       <div className="icon-strip" data-testid="builder-sidebar">
         {ICON_STRIP_ITEMS.map(item => (
           <button
@@ -255,6 +260,6 @@ export default function Sidebar({ activePanel, setActivePanel }) {
       {activePanel && (
         <ElementsSubPanel key={activePanel} panelId={activePanel} onClose={() => setActivePanel(null)} />
       )}
-    </>
+    </div>
   );
 }

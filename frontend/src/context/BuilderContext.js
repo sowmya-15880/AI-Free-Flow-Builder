@@ -1,8 +1,40 @@
-import { createContext, useContext, useReducer, useCallback } from 'react';
+import { createContext, useContext, useReducer, useCallback, useEffect, useRef } from 'react';
+import { initRustCanvasEngine, tryApplyRustMutation } from '@/lib/rustCanvasEngine';
 
 const BuilderContext = createContext();
 
 const generateId = () => Math.random().toString(36).substring(2, 11);
+const SNAP_GRID = 8;
+const DEFAULT_LEFT = 24;
+const DEFAULT_TOP_BASE = 36;
+const DEFAULT_TOP_GAP = 120;
+
+const snapToGrid = (value) => Math.round(value / SNAP_GRID) * SNAP_GRID;
+const getDefaultPosition = (index = 0) => ({
+  x: DEFAULT_LEFT,
+  y: DEFAULT_TOP_BASE + (index * DEFAULT_TOP_GAP),
+});
+const ensureElementPosition = (element, index = 0) => {
+  if (element?.position && typeof element.position.x === 'number' && typeof element.position.y === 'number') {
+    return {
+      ...element,
+      position: {
+        x: snapToGrid(element.position.x),
+        y: snapToGrid(element.position.y),
+      }
+    };
+  }
+  const defaultPos = getDefaultPosition(index);
+  return { ...element, position: defaultPos };
+};
+
+const ensurePagePositions = (page) => ({
+  ...page,
+  sections: (page.sections || []).map((section) => ({
+    ...section,
+    elements: (section.elements || []).map((element, index) => ensureElementPosition(element, index)),
+  })),
+});
 
 export const createDefaultElement = (type) => {
   const id = generateId();
@@ -81,12 +113,23 @@ const builderReducer = (state, action) => {
 
   switch (action.type) {
     case 'SET_PAGE': {
-      newPage = action.payload;
+      newPage = ensurePagePositions(action.payload);
       return {
         ...state, page: newPage,
         history: [JSON.parse(JSON.stringify(newPage))],
         historyIndex: 0,
         selectedElementId: null, selectedSectionId: null
+      };
+    }
+
+    case 'SET_PAGE_FROM_RUST': {
+      newPage = ensurePagePositions(action.payload);
+      return {
+        ...state,
+        page: newPage,
+        ...pushHistory(state, newPage),
+        selectedElementId: action.selectedElementId !== undefined ? action.selectedElementId : state.selectedElementId,
+        selectedSectionId: action.selectedSectionId !== undefined ? action.selectedSectionId : state.selectedSectionId,
       };
     }
 
@@ -111,7 +154,10 @@ const builderReducer = (state, action) => {
     }
 
     case 'ADD_ELEMENT': {
-      const element = action.element || createDefaultElement(action.elementType);
+      const targetSection = state.page.sections.find(s => s.id === action.sectionId);
+      const newIndex = targetSection?.elements?.length || 0;
+      const baseElement = action.element || createDefaultElement(action.elementType);
+      const element = ensureElementPosition(baseElement, newIndex);
       newPage = {
         ...state.page,
         sections: state.page.sections.map(s =>
@@ -138,6 +184,21 @@ const builderReducer = (state, action) => {
           ...s,
           elements: s.elements.map(e =>
             e.id === action.elementId ? { ...e, ...action.updates } : e
+          )
+        }))
+      };
+      return { ...state, page: newPage, ...pushHistory(state, newPage) };
+    }
+
+    case 'MOVE_ELEMENT_POSITION': {
+      newPage = {
+        ...state.page,
+        sections: state.page.sections.map(s => ({
+          ...s,
+          elements: s.elements.map(e =>
+            e.id === action.elementId
+              ? { ...e, position: { x: snapToGrid(action.x), y: snapToGrid(action.y) } }
+              : e
           )
         }))
       };
@@ -226,6 +287,47 @@ const initialState = {
 
 export const BuilderProvider = ({ children }) => {
   const [state, dispatch] = useReducer(builderReducer, initialState);
+  const pageRef = useRef(state.page);
+
+  useEffect(() => {
+    initRustCanvasEngine();
+  }, []);
+
+  useEffect(() => {
+    pageRef.current = state.page;
+  }, [state.page]);
+
+  const dispatchWithEngine = useCallback((action) => {
+    if (!action || typeof action.type !== 'string') {
+      return;
+    }
+
+    const currentPage = pageRef.current;
+    let rustAction = action;
+
+    if (action.type === 'ADD_ELEMENT' && action.sectionId) {
+      const targetSection = currentPage.sections.find((s) => s.id === action.sectionId);
+      const newIndex = targetSection?.elements?.length || 0;
+      const baseElement = action.element || createDefaultElement(action.elementType);
+      const normalizedElement = ensureElementPosition(baseElement, newIndex);
+      rustAction = { ...action, element: normalizedElement };
+    }
+
+    const rustPage = tryApplyRustMutation(currentPage, rustAction);
+
+    if (rustPage) {
+      dispatch({
+        type: 'SET_PAGE_FROM_RUST',
+        payload: rustPage,
+        selectedElementId: rustAction.type === 'ADD_ELEMENT' ? rustAction.element?.id : undefined,
+        selectedSectionId: rustAction.type === 'ADD_ELEMENT' ? rustAction.sectionId : undefined,
+      });
+      return;
+    }
+
+    dispatch(action);
+  }, []);
+
   const undo = useCallback(() => dispatch({ type: 'UNDO' }), []);
   const redo = useCallback(() => dispatch({ type: 'REDO' }), []);
   const canUndo = state.historyIndex > 0;
@@ -247,7 +349,7 @@ export const BuilderProvider = ({ children }) => {
 
   return (
     <BuilderContext.Provider value={{
-      state, dispatch, undo, redo, canUndo, canRedo,
+      state, dispatch: dispatchWithEngine, undo, redo, canUndo, canRedo,
       getSelectedElement, getSelectedSection
     }}>
       {children}

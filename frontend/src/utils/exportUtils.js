@@ -11,6 +11,21 @@ export const exportJSON = (page) => {
   URL.revokeObjectURL(url);
 };
 
+const getElementPosition = (el, index) => {
+  if (el?.position && typeof el.position.x === 'number' && typeof el.position.y === 'number') {
+    return el.position;
+  }
+  return { x: 24, y: 36 + (index * 120) };
+};
+
+const estimateSectionHeight = (section) => {
+  const maxBottom = (section.elements || []).reduce((acc, el, idx) => {
+    const pos = getElementPosition(el, idx);
+    return Math.max(acc, pos.y + 180);
+  }, 0);
+  return Math.max(420, maxBottom + 56);
+};
+
 const renderElementHTML = (el) => {
   const styleStr = Object.entries(el.style || {})
     .map(([k, v]) => `${k.replace(/([A-Z])/g, '-$1').toLowerCase()}: ${v}`)
@@ -73,9 +88,18 @@ export const exportHTML = (page) => {
     const sectionStyle = Object.entries(section.style || {})
       .map(([k, v]) => `${k.replace(/([A-Z])/g, '-$1').toLowerCase()}: ${v}`)
       .join('; ');
-    const elementsHTML = (section.elements || []).map(renderElementHTML).join('\n      ');
-    return `    <section style="${sectionStyle}">
-      ${elementsHTML}
+    const sectionHeight = estimateSectionHeight(section);
+    const elementsHTML = (section.elements || []).map((el, idx) => {
+      const pos = getElementPosition(el, idx);
+      return `<div style="position: absolute; left: ${pos.x}px; top: ${pos.y}px; max-width: calc(100% - 24px); min-width: 120px;">
+        ${renderElementHTML(el)}
+      </div>`;
+    }).join('\n        ');
+
+    return `    <section style="${sectionStyle}; position: relative; overflow: hidden;">
+      <div style="position: relative; min-height: ${sectionHeight}px;">
+        ${elementsHTML}
+      </div>
     </section>`;
   }).join('\n');
 
@@ -86,8 +110,9 @@ export const exportHTML = (page) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${page.title || 'Landing Page'}</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body { font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
     img { max-width: 100%; height: auto; }
     section { width: 100%; }
   </style>

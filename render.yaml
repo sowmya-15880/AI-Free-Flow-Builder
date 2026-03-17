@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: ffb-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m uvicorn server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.14
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: USE_LOCAL_TEST_AGENT
+        value: "true"
+      - key: USE_EMERGENT_FOR_OPENAI
+        value: "false"
+      - key: USE_EMERGENT_FOR_GEMINI
+        value: "false"
+
+  - type: static_site
+    name: ffb-frontend
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: build
+    envVars:
+      - key: REACT_APP_BACKEND_URL
+        fromService:
+          type: web
+          name: ffb-api
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: REACT_APP_USE_RUST_CANVAS
+        value: "true"
+      - key: REACT_APP_RUST_CANVAS_MODULE_URL
+        value: /wasm/ffb_canvas_engine.js

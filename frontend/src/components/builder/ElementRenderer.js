@@ -20,12 +20,45 @@ const ICON_MAP = {
   Layers: LucideIcons.Layers,
 };
 
-function HeadingElement({ element }) {
-  return <h2 style={element.style}>{element.content}</h2>;
+function commitTextUpdate(nextValue, onContentChange, fallbackValue = '') {
+  if (!onContentChange) return;
+  const normalized = (nextValue || '').replace(/\u00a0/g, ' ').trim();
+  onContentChange(normalized || fallbackValue || '');
 }
 
-function ParagraphElement({ element }) {
-  return <p style={element.style}>{element.content}</p>;
+function HeadingElement({ element, editable, onContentChange }) {
+  const Tag = element.style?.tag || 'h2';
+  return (
+    <Tag
+      className="inline-text-editable"
+      style={element.style}
+      contentEditable={!!editable}
+      suppressContentEditableWarning
+      onBlur={(e) => commitTextUpdate(e.currentTarget.textContent, onContentChange, element.content)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          e.currentTarget.blur();
+        }
+      }}
+    >
+      {element.content}
+    </Tag>
+  );
+}
+
+function ParagraphElement({ element, editable, onContentChange }) {
+  return (
+    <p
+      className="inline-text-editable"
+      style={element.style}
+      contentEditable={!!editable}
+      suppressContentEditableWarning
+      onBlur={(e) => commitTextUpdate(e.currentTarget.textContent, onContentChange, element.content)}
+    >
+      {element.content}
+    </p>
+  );
 }
 
 function ImageElement({ element }) {
@@ -45,20 +78,39 @@ function ImageElement({ element }) {
   );
 }
 
-function ButtonElement({ element }) {
+function ButtonElement({ element, editable, onContentChange }) {
   return (
     <div style={{ textAlign: element.style?.textAlign || 'left' }}>
-      <span style={{ ...element.style, display: 'inline-block' }}>
+      <span
+        className="inline-text-editable"
+        style={{ ...element.style, display: 'inline-block' }}
+        contentEditable={!!editable}
+        suppressContentEditableWarning
+        onBlur={(e) => commitTextUpdate(e.currentTarget.textContent, onContentChange, element.content)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            e.currentTarget.blur();
+          }
+        }}
+      >
         {element.content}
       </span>
     </div>
   );
 }
 
-function FormElement({ element }) {
+function FormElement({ element, editable, onContentChange }) {
   const content = typeof element.content === 'object' ? element.content : {};
   const fields = content.fields || [];
   const submitText = content.submitText || 'Submit';
+  const updateSubmitText = (nextValue) => {
+    if (!onContentChange) return;
+    onContentChange({
+      ...content,
+      submitText: (nextValue || '').replace(/\u00a0/g, ' ').trim() || 'Submit',
+    });
+  };
 
   return (
     <div style={element.style}>
@@ -83,12 +135,21 @@ function FormElement({ element }) {
           )}
         </div>
       ))}
-      <button
-        style={{ background: '#6366f1', color: 'white', padding: '12px 28px', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: 'pointer', width: '100%', fontFamily: 'inherit' }}
-        type="button"
+      <div
+        className="inline-text-editable"
+        style={{ background: '#6366f1', color: 'white', padding: '12px 28px', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 600, width: '100%', fontFamily: 'inherit', textAlign: 'center' }}
+        contentEditable={!!editable}
+        suppressContentEditableWarning
+        onBlur={(e) => updateSubmitText(e.currentTarget.textContent)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            e.currentTarget.blur();
+          }
+        }}
       >
         {submitText}
-      </button>
+      </div>
     </div>
   );
 }
@@ -128,16 +189,36 @@ function GalleryElement({ element }) {
   );
 }
 
-function PopupElement({ element }) {
+function PopupElement({ element, editable, onContentChange }) {
   const [open, setOpen] = useState(false);
   const content = typeof element.content === 'object' ? element.content : {};
+  const updateTriggerText = (nextValue) => {
+    if (!onContentChange) return;
+    onContentChange({
+      ...content,
+      triggerText: (nextValue || '').replace(/\u00a0/g, ' ').trim() || 'Open Popup',
+    });
+  };
 
   return (
     <>
       <div style={{ textAlign: element.style?.textAlign || 'left' }}>
         <span
+          className="inline-text-editable"
           style={{ ...element.style, display: 'inline-block' }}
-          onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!editable) setOpen(true);
+          }}
+          contentEditable={!!editable}
+          suppressContentEditableWarning
+          onBlur={(e) => updateTriggerText(e.currentTarget.textContent)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              e.currentTarget.blur();
+            }
+          }}
         >
           {content.triggerText || 'Open Popup'}
         </span>
@@ -188,16 +269,16 @@ function SpacerElement({ element }) {
   return <div style={element.style} />;
 }
 
-const ElementRenderer = memo(function ElementRenderer({ element }) {
+const ElementRenderer = memo(function ElementRenderer({ element, editable = false, onContentChange = null }) {
   switch (element.type) {
-    case 'heading': return <HeadingElement element={element} />;
-    case 'paragraph': return <ParagraphElement element={element} />;
+    case 'heading': return <HeadingElement element={element} editable={editable} onContentChange={onContentChange} />;
+    case 'paragraph': return <ParagraphElement element={element} editable={editable} onContentChange={onContentChange} />;
     case 'image': return <ImageElement element={element} />;
-    case 'button': return <ButtonElement element={element} />;
-    case 'form': return <FormElement element={element} />;
+    case 'button': return <ButtonElement element={element} editable={editable} onContentChange={onContentChange} />;
+    case 'form': return <FormElement element={element} editable={editable} onContentChange={onContentChange} />;
     case 'icon': return <IconElement element={element} />;
     case 'gallery': return <GalleryElement element={element} />;
-    case 'popup': return <PopupElement element={element} />;
+    case 'popup': return <PopupElement element={element} editable={editable} onContentChange={onContentChange} />;
     case 'divider': return <DividerElement element={element} />;
     case 'spacer': return <SpacerElement element={element} />;
     default: return <div style={element.style}>{typeof element.content === 'string' ? element.content : 'Unknown element'}</div>;
