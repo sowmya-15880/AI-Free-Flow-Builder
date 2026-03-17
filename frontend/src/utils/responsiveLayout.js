@@ -64,6 +64,13 @@ export const estimateElementSize = (element, widthHint = 760) => {
     return { width, height: 120 + (fields * 72) };
   }
 
+  if (type === 'box') {
+    return {
+      width: clamp(parsePx(style.width, width), 80, widthHint),
+      height: Math.max(40, parsePx(style.height, 160)),
+    };
+  }
+
   if (type === 'button' || type === 'popup') {
     const text = typeof content === 'string' ? content : (content?.triggerText || 'Button');
     const fontSize = parsePx(style.fontSize, 16);

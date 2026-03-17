@@ -173,6 +173,7 @@ function FormProps({ el, dispatch }) {
   const c = typeof el.content === 'object' ? el.content : {};
   const fields = c.fields || [];
   const ufc = (nc) => dispatch({ type: 'UPDATE_ELEMENT', elementId: el.id, updates: { content: nc } });
+  const us = (k, v) => dispatch({ type: 'UPDATE_ELEMENT', elementId: el.id, updates: { style: { ...el.style, [k]: v } } });
   return <>
     <div className="fp-section"><div className="fp-section-title">Form Fields</div>
       {fields.map((f, i) => (
@@ -188,6 +189,28 @@ function FormProps({ el, dispatch }) {
         data-testid="add-form-field-btn"
         type="button"
       ><Plus size={12} /> Add Field</button>
+    </div>
+    <div className="fp-section"><div className="fp-section-title">Appearance</div>
+      <PropColor label="Form Background" value={el.style?.backgroundColor} onChange={v => us('backgroundColor', v)} />
+      <PropInput label="Border Radius" value={el.style?.borderRadius} onChange={v => us('borderRadius', v)} />
+      <PropColor label="Button Background" value={el.style?.buttonBackgroundColor} onChange={v => us('buttonBackgroundColor', v)} />
+      <PropColor label="Button Text" value={el.style?.buttonTextColor} onChange={v => us('buttonTextColor', v)} />
+      <PropColor label="Input Background" value={el.style?.inputBackgroundColor} onChange={v => us('inputBackgroundColor', v)} />
+      <PropColor label="Input Text" value={el.style?.inputTextColor} onChange={v => us('inputTextColor', v)} />
+      <PropColor label="Input Border" value={el.style?.inputBorderColor} onChange={v => us('inputBorderColor', v)} />
+    </div>
+  </>;
+}
+
+function BoxProps({ el, us }) {
+  return <>
+    <div className="fp-section"><div className="fp-section-title">Box</div>
+      <PropColor label="Background" value={el.style?.backgroundColor} onChange={v => us('backgroundColor', v)} />
+      <PropInput label="Width" value={el.style?.width} onChange={v => us('width', v)} />
+      <PropInput label="Height" value={el.style?.height} onChange={v => us('height', v)} />
+      <PropInput label="Border Radius" value={el.style?.borderRadius} onChange={v => us('borderRadius', v)} />
+      <PropInput label="Border" value={el.style?.border} onChange={v => us('border', v)} />
+      <PropInput label="Shadow" value={el.style?.boxShadow} onChange={v => us('boxShadow', v)} />
     </div>
   </>;
 }
@@ -351,6 +374,7 @@ export default function PropertiesPanel() {
     if (el?.type === 'image') return <ImageProps el={el} us={us} dispatch={dispatch} />;
     if (el?.type === 'button') return <ButtonProps el={el} us={us} />;
     if (el?.type === 'form') return <FormProps el={el} dispatch={dispatch} />;
+    if (el?.type === 'box') return <BoxProps el={el} us={us} />;
     if (el?.type === 'icon') return <IconProps el={el} dispatch={dispatch} us={us} />;
     if (el?.type === 'popup') return <PopupProps el={el} dispatch={dispatch} us={us} />;
     if (el?.type === 'gallery') return <GalleryProps el={el} dispatch={dispatch} us={us} />;

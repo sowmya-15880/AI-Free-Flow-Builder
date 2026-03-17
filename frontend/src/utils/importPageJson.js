@@ -33,6 +33,24 @@ const toPx = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const parseLineHeight = (value, fontSize, multiplier) => {
+  if (typeof value === 'number') {
+    if (value <= 10) return Math.max(fontSize * value, fontSize);
+    return value;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed) return fontSize * multiplier;
+    if (trimmed.endsWith('px')) return Math.max(toPx(trimmed, fontSize * multiplier), fontSize);
+    const numeric = Number(trimmed);
+    if (!Number.isNaN(numeric)) {
+      if (numeric <= 10) return Math.max(fontSize * numeric, fontSize);
+      return numeric;
+    }
+  }
+  return fontSize * multiplier;
+};
+
 const getSpacingValue = (spacing, edge) => {
   if (!spacing || typeof spacing !== 'object') return 0;
   if (spacing.even && spacing.size !== undefined && spacing.size !== '') return toPx(spacing.size, 0);
@@ -65,22 +83,81 @@ const getNodeSpacing = (node) => {
   return element.spacing || {};
 };
 
+const hasShadow = (element) => Array.isArray(element?.box_shadow)
+  && element.box_shadow.some((shadow) => shadow && String(shadow.color || '').trim());
+
+const buildShadow = (element) => {
+  const shadow = Array.isArray(element?.box_shadow) ? element.box_shadow[0] : null;
+  if (!shadow || !shadow.color) return undefined;
+  const x = toPx(shadow.offset_x, 0);
+  const y = toPx(shadow.offset_y, 0);
+  const blur = toPx(shadow.blur, 0);
+  const spread = toPx(shadow.spread, 0);
+  const inset = shadow.inset ? ' inset' : '';
+  return `${x}px ${y}px ${blur}px ${spread}px ${shadow.color}${inset}`;
+};
+
+const buildBorder = (element) => {
+  const border = element?.border;
+  if (!border) return undefined;
+  const style = border.style || '';
+  const color = border.color || '';
+  const width = border.width?.even_width || border.width?.top || '';
+  if (!style || !color || !width) return undefined;
+  return `${toPx(width, 1)}px ${style} ${color}`;
+};
+
+const getRadius = (element, fallback = 12) => `${toPx(element?.border?.radius?.size, fallback)}px`;
+
+const hasVisualSurface = (element) => {
+  const background = element?.background || {};
+  return background.type === 'image'
+    || (background.type === 'color' && !!background?.color?.background_color)
+    || !!buildBorder(element)
+    || hasShadow(element);
+};
+
+const createSurfaceElement = ({ x, y, width, height, element, kind = 'box' }) => {
+  const background = element?.background || {};
+  const style = {
+    width: `${Math.max(80, width)}px`,
+    height: `${Math.max(32, height)}px`,
+    backgroundColor: background?.color?.background_color || 'transparent',
+    borderRadius: getRadius(element, 12),
+    border: buildBorder(element),
+    boxShadow: buildShadow(element),
+  };
+  if (background.type === 'image' && background.image?.image_url) {
+    style.backgroundImage = `url(${background.image.image_url})`;
+    style.backgroundSize = background.image.image_size || 'cover';
+    style.backgroundPosition = (background.image.image_position || 'center').replace(/-/g, ' ');
+    style.backgroundRepeat = 'no-repeat';
+  }
+  return {
+    id: makeId(kind),
+    type: 'box',
+    content: '',
+    position: { x: snap(x), y: snap(y) },
+    style,
+  };
+};
+
 const estimateElementHeight = (element) => {
   if (!element) return 80;
   switch (element.type) {
     case 'heading': {
       const fontSize = toPx(element.style?.fontSize, 36);
-      const lineHeight = parseFloat(element.style?.lineHeight || '1.2') || 1.2;
+      const lineHeight = parseLineHeight(element.style?.lineHeight, fontSize, 1.2);
       const chars = String(element.content || '').length;
       const approxLines = Math.max(1, Math.ceil(chars / 28));
-      return Math.max(64, Math.ceil(fontSize * lineHeight * approxLines) + 12);
+      return Math.max(64, Math.ceil(lineHeight * approxLines) + 12);
     }
     case 'paragraph': {
       const fontSize = toPx(element.style?.fontSize, 16);
-      const lineHeight = parseFloat(element.style?.lineHeight || '1.6') || 1.6;
+      const lineHeight = parseLineHeight(element.style?.lineHeight, fontSize, 1.6);
       const chars = String(element.content || '').length;
       const approxLines = Math.max(1, Math.ceil(chars / 52));
-      return Math.max(48, Math.ceil(fontSize * lineHeight * approxLines) + 8);
+      return Math.max(48, Math.ceil(lineHeight * approxLines) + 8);
     }
     case 'button':
       return 56;
@@ -88,6 +165,8 @@ const estimateElementHeight = (element) => {
       return Math.max(180, toPx(element.style?.height, toPx(element.style?.maxWidth, 280) * 0.68));
     case 'form':
       return 240;
+    case 'box':
+      return Math.max(40, toPx(element.style?.height, 160));
     case 'icon':
       return 72;
     case 'spacer':
@@ -189,6 +268,8 @@ const mapLeafNode = (node, x, y, width) => {
         fontWeight: extractFontWeight(element.typography, 700),
         textAlign: element.align || 'center',
         display: 'inline-block',
+        border: buildBorder(element),
+        boxShadow: buildShadow(element),
       },
     };
     return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 10 };
@@ -198,6 +279,7 @@ const mapLeafNode = (node, x, y, width) => {
     const src = element.src || element.image_url || '';
     if (!src) return { element: null, consumedHeight: 0 };
     const maxWidth = Math.min(width - 16, toPx(element.desktop_width || element.width, width - 16) || (width - 16));
+    const explicitHeight = toPx(element.desktop_height || element.height, 0);
     const mapped = {
       id: makeId('image'),
       type: 'image',
@@ -207,10 +289,14 @@ const mapLeafNode = (node, x, y, width) => {
       },
       position: { x: snap(x), y: snap(nextY) },
       style: {
-        width: '100%',
+        width: `${Math.max(180, maxWidth)}px`,
         maxWidth: `${Math.max(180, maxWidth)}px`,
+        height: explicitHeight ? `${explicitHeight}px` : 'auto',
         borderRadius: element.style === 'circle' ? '999px' : `${toPx(element.border?.radius?.size, 12)}px`,
         display: 'block',
+        objectFit: element.size === 'fit' ? 'contain' : 'cover',
+        border: buildBorder(element),
+        boxShadow: buildShadow(element),
       },
     };
     return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 16 };
@@ -233,6 +319,14 @@ const mapLeafNode = (node, x, y, width) => {
         backgroundColor: element.input_bg?.color || '#ffffff',
         borderRadius: `${toPx(element.input_border?.radius?.size, 16)}px`,
         maxWidth: `${Math.max(280, width - 16)}px`,
+        buttonBackgroundColor: element.button_bg?.color || '#2CB24C',
+        buttonTextColor: element.button_typography?.color || '#ffffff',
+        inputBackgroundColor: element.input_bg?.color || 'rgba(255,255,255,0.7)',
+        inputTextColor: element.input_typography?.color || '#111827',
+        inputBorderColor: element.input_border?.color || '#d1d5db',
+        inputBorderRadius: `${toPx(element.input_border?.radius?.size, 12)}px`,
+        border: buildBorder(element),
+        boxShadow: buildShadow(element),
       },
     };
     return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 20 };
@@ -280,13 +374,16 @@ const convertGraphPage = (rawPage) => {
     if (!node) return 0;
 
     if (node.type === 'row') {
+      const surfaceIndex = acc.length;
       const columns = node.columns || [];
+      const nodeElement = node.element || {};
       const rowSpacing = getNodeSpacing(node);
       const marginTop = getSpacingValue(rowSpacing.margin, 'top');
       const marginBottom = getSpacingValue(rowSpacing.margin, 'bottom');
       const paddingLeft = getSpacingValue(rowSpacing.padding, 'left');
       const paddingRight = getSpacingValue(rowSpacing.padding, 'right');
       const paddingTop = getSpacingValue(rowSpacing.padding, 'top');
+      const paddingBottom = getSpacingValue(rowSpacing.padding, 'bottom');
       const innerX = layout.x + paddingLeft;
       const innerWidth = Math.max(260, layout.width - paddingLeft - paddingRight);
       const ratios = parseRatioList(node.element?.column_ratio, columns.length);
@@ -301,11 +398,25 @@ const convertGraphPage = (rawPage) => {
         offsetX += columnWidth;
       });
 
-      return rowHeight + marginTop + marginBottom + paddingTop;
+      const totalRowHeight = rowHeight + paddingBottom;
+      if (hasVisualSurface(nodeElement)) {
+        acc.splice(surfaceIndex, 0, createSurfaceElement({
+          x: layout.x,
+          y: layout.y + marginTop,
+          width: layout.width,
+          height: totalRowHeight,
+          element: nodeElement,
+          kind: 'row',
+        }));
+      }
+
+      return totalRowHeight + marginTop + marginBottom + paddingTop;
     }
 
     if (node.type === 'column' || node.type === 'box') {
+      const surfaceIndex = acc.length;
       const children = node.elements || [];
+      const nodeElement = node.element || {};
       const spacing = getNodeSpacing(node);
       const marginTop = getSpacingValue(spacing.margin, 'top');
       const marginBottom = getSpacingValue(spacing.margin, 'bottom');
@@ -330,7 +441,19 @@ const convertGraphPage = (rawPage) => {
         cursorY += mapped.consumedHeight || 0;
       });
 
-      return Math.max(0, cursorY - layout.y + paddingBottom + marginBottom);
+      const totalHeight = Math.max(0, cursorY - layout.y + paddingBottom + marginBottom);
+      if (node.type === 'box' && hasVisualSurface(nodeElement)) {
+        acc.splice(surfaceIndex, 0, createSurfaceElement({
+          x: layout.x,
+          y: layout.y + marginTop,
+          width: layout.width,
+          height: Math.max(48, totalHeight - marginTop - marginBottom),
+          element: nodeElement,
+          kind: 'box',
+        }));
+      }
+
+      return totalHeight;
     }
 
     const mapped = mapLeafNode(node, layout.x, layout.y, layout.width);

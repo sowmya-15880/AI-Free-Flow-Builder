@@ -78,6 +78,10 @@ function ImageElement({ element }) {
   );
 }
 
+function BoxElement({ element }) {
+  return <div style={element.style} />;
+}
+
 function ButtonElement({ element, editable, onContentChange }) {
   return (
     <div style={{ textAlign: element.style?.textAlign || 'left' }}>
@@ -104,6 +108,17 @@ function FormElement({ element, editable, onContentChange }) {
   const content = typeof element.content === 'object' ? element.content : {};
   const fields = content.fields || [];
   const submitText = content.submitText || 'Submit';
+  const style = element.style || {};
+  const inputStyle = {
+    width: '100%',
+    padding: '10px 12px',
+    border: `1px solid ${style.inputBorderColor || '#d1d5db'}`,
+    borderRadius: style.inputBorderRadius || 6,
+    fontSize: 14,
+    fontFamily: 'inherit',
+    background: style.inputBackgroundColor || '#ffffff',
+    color: style.inputTextColor || '#111827',
+  };
   const updateSubmitText = (nextValue) => {
     if (!onContentChange) return;
     onContentChange({
@@ -113,7 +128,7 @@ function FormElement({ element, editable, onContentChange }) {
   };
 
   return (
-    <div style={element.style}>
+    <div style={style}>
       {fields.map((field, i) => (
         <div key={i} style={{ marginBottom: 14 }}>
           <label style={{ display: 'block', fontWeight: 600, marginBottom: 5, fontSize: 14, color: '#374151' }}>
@@ -122,14 +137,14 @@ function FormElement({ element, editable, onContentChange }) {
           {field.type === 'textarea' ? (
             <textarea
               placeholder={field.placeholder}
-              style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, minHeight: 70, resize: 'vertical', fontFamily: 'inherit' }}
+              style={{ ...inputStyle, minHeight: 70, resize: 'vertical' }}
               readOnly
             />
           ) : (
             <input
               type={field.type || 'text'}
               placeholder={field.placeholder}
-              style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, fontFamily: 'inherit' }}
+              style={inputStyle}
               readOnly
             />
           )}
@@ -137,7 +152,18 @@ function FormElement({ element, editable, onContentChange }) {
       ))}
       <div
         className="inline-text-editable"
-        style={{ background: '#6366f1', color: 'white', padding: '12px 28px', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 600, width: '100%', fontFamily: 'inherit', textAlign: 'center' }}
+        style={{
+          background: style.buttonBackgroundColor || '#6366f1',
+          color: style.buttonTextColor || 'white',
+          padding: '12px 28px',
+          border: 'none',
+          borderRadius: 8,
+          fontSize: 15,
+          fontWeight: 600,
+          width: '100%',
+          fontFamily: 'inherit',
+          textAlign: 'center'
+        }}
         contentEditable={!!editable}
         suppressContentEditableWarning
         onBlur={(e) => updateSubmitText(e.currentTarget.textContent)}
@@ -271,6 +297,7 @@ function SpacerElement({ element }) {
 
 const ElementRenderer = memo(function ElementRenderer({ element, editable = false, onContentChange = null }) {
   switch (element.type) {
+    case 'box': return <BoxElement element={element} />;
     case 'heading': return <HeadingElement element={element} editable={editable} onContentChange={onContentChange} />;
     case 'paragraph': return <ParagraphElement element={element} editable={editable} onContentChange={onContentChange} />;
     case 'image': return <ImageElement element={element} />;
