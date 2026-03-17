@@ -13,10 +13,6 @@ services:
         value: "*"
       - key: USE_LOCAL_TEST_AGENT
         value: "true"
-      - key: USE_EMERGENT_FOR_OPENAI
-        value: "false"
-      - key: USE_EMERGENT_FOR_GEMINI
-        value: "false"
 
   - type: static_site
     name: ffb-frontend

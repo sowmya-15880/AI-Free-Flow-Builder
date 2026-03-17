@@ -748,24 +748,8 @@ async def generate_with_openai(
             response_text = str(content or "")
         return json.loads(normalize_json_text(response_text)), f"openai:{openai_model}"
 
-    # Optional bridge path through emergent integrations (explicit opt-in).
-    emergent_key = os.environ.get("EMERGENT_LLM_KEY")
-    use_emergent_bridge = os.environ.get("USE_EMERGENT_FOR_OPENAI", "false").strip().lower() == "true"
-    if use_emergent_bridge and emergent_key:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-
-        emergent_model = os.environ.get("EMERGENT_OPENAI_MODEL", "gpt-5.2")
-        chat = LlmChat(
-            api_key=emergent_key,
-            session_id=str(uuid.uuid4()),
-            system_message=system_prompt,
-        ).with_model("openai", emergent_model)
-        response = await asyncio.wait_for(chat.send_message(UserMessage(text=user_prompt)), timeout=24)
-        return json.loads(normalize_json_text(response)), f"openai-emergent:{emergent_model}"
-
     raise RuntimeError(
-        "No OpenAI credentials configured. Set OPENAI_API_KEY "
-        "(or set USE_EMERGENT_FOR_OPENAI=true with EMERGENT_LLM_KEY)."
+        "No OpenAI credentials configured. Set OPENAI_API_KEY."
     )
 
 
@@ -827,24 +811,8 @@ async def generate_with_gemini(
         if last_error:
             raise last_error
 
-    # Optional bridge path through emergent integrations (explicit opt-in).
-    emergent_key = os.environ.get("EMERGENT_LLM_KEY")
-    use_emergent_bridge = os.environ.get("USE_EMERGENT_FOR_GEMINI", "false").strip().lower() == "true"
-    if use_emergent_bridge and emergent_key:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-
-        emergent_model = os.environ.get("EMERGENT_GEMINI_MODEL", "gemini-1.5-flash")
-        chat = LlmChat(
-            api_key=emergent_key,
-            session_id=str(uuid.uuid4()),
-            system_message=system_prompt,
-        ).with_model("google", emergent_model)
-        response = await asyncio.wait_for(chat.send_message(UserMessage(text=user_prompt)), timeout=24)
-        return json.loads(normalize_json_text(response)), f"gemini-emergent:{emergent_model}"
-
     raise RuntimeError(
-        "No Gemini credentials configured. Set GEMINI_API_KEY "
-        "(or set USE_EMERGENT_FOR_GEMINI=true with EMERGENT_LLM_KEY)."
+        "No Gemini credentials configured. Set GEMINI_API_KEY."
     )
 
 
@@ -914,24 +882,16 @@ Choose the category closest to the user's prompt topic. Use DIFFERENT images for
         generator_used = "fallback"
         force_local_test_agent = os.environ.get("USE_LOCAL_TEST_AGENT", "false").strip().lower() == "true"
         has_gemini_key = bool(os.environ.get("GEMINI_API_KEY"))
-        has_gemini_emergent_bridge = (
-            os.environ.get("USE_EMERGENT_FOR_GEMINI", "false").strip().lower() == "true"
-            and bool(os.environ.get("EMERGENT_LLM_KEY"))
-        )
         has_openai_key = bool(os.environ.get("OPENAI_API_KEY"))
-        has_openai_emergent_bridge = (
-            os.environ.get("USE_EMERGENT_FOR_OPENAI", "false").strip().lower() == "true"
-            and bool(os.environ.get("EMERGENT_LLM_KEY"))
-        )
 
         if force_local_test_agent:
             page_data, generator_used = generate_with_local_test_agent(generation_brief, context, variant_index)
-        elif has_gemini_key or has_gemini_emergent_bridge:
+        elif has_gemini_key:
             try:
                 page_data, generator_used = await generate_with_gemini(system_prompt, generation_brief, variant_index)
             except Exception as gemini_error:
                 logger.warning(f"Gemini generation failed: {gemini_error}")
-                if has_openai_key or has_openai_emergent_bridge:
+                if has_openai_key:
                     try:
                         page_data, generator_used = await generate_with_openai(system_prompt, generation_brief, variant_index)
                     except Exception as openai_error:
@@ -941,7 +901,7 @@ Choose the category closest to the user's prompt topic. Use DIFFERENT images for
                 else:
                     page_data = local_fallback_page(generation_brief, context, variant_index)
                     generator_used = "fallback-gemini-error"
-        elif has_openai_key or has_openai_emergent_bridge:
+        elif has_openai_key:
             try:
                 page_data, generator_used = await generate_with_openai(system_prompt, generation_brief, variant_index)
             except Exception as ai_error:
