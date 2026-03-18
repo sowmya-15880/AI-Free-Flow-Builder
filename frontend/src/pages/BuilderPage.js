@@ -29,6 +29,33 @@ const getSectionContentAtPoint = (x, y) => {
   return null;
 };
 
+const getNearestColumnAtPoint = (x, y, sectionId) => {
+  if (typeof x !== 'number' || typeof y !== 'number') return null;
+  const stack = document.elementsFromPoint(x, y) || [];
+  for (const el of stack) {
+    const columnEl = el.closest?.(`.canvas-element-wrapper[data-element-type="column"][data-parent-row-id]`);
+    if (columnEl) return columnEl;
+  }
+
+  const columnEls = Array.from(document.querySelectorAll(`.canvas-section-content[data-section-id="${sectionId}"] .canvas-element-wrapper[data-element-type="column"]`));
+  if (!columnEls.length) return null;
+  let best = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  columnEls.forEach((columnEl) => {
+    const rect = columnEl.getBoundingClientRect();
+    const clampedX = clamp(x, rect.left, rect.right);
+    const clampedY = clamp(y, rect.top, rect.bottom);
+    const dx = x - clampedX;
+    const dy = y - clampedY;
+    const distance = (dx * dx) + (dy * dy);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = columnEl;
+    }
+  });
+  return best;
+};
+
 const projectDropPosition = (sectionContent, pointer) => {
   if (!sectionContent || !pointer) return null;
   const rect = sectionContent.getBoundingClientRect();
@@ -200,6 +227,13 @@ function BuilderInner() {
 
       if (sectionId) {
         const newElement = createDefaultElement(activeData.elementType);
+        const targetColumn = pointerFromEvent ? getNearestColumnAtPoint(pointerFromEvent.x, pointerFromEvent.y, sectionId) : null;
+        if (targetColumn?.dataset?.elementId) {
+          newElement.parentColumnId = targetColumn.dataset.elementId;
+          if (targetColumn.dataset.parentRowId) {
+            newElement.parentRowId = targetColumn.dataset.parentRowId;
+          }
+        }
         if (projectedPos) {
           newElement.position = projectedPos;
         }

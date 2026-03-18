@@ -71,6 +71,13 @@ export const estimateElementSize = (element, widthHint = 760) => {
     };
   }
 
+  if (type === 'row' || type === 'column') {
+    return {
+      width: clamp(parsePx(style.width, width), 120, widthHint),
+      height: Math.max(48, parsePx(style.height, 220)),
+    };
+  }
+
   if (type === 'button' || type === 'popup') {
     const text = typeof content === 'string' ? content : (content?.triggerText || 'Button');
     const fontSize = parsePx(style.fontSize, 16);

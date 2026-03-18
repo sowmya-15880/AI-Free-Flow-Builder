@@ -111,6 +111,152 @@ const ensurePagePositions = (page) => ({
   sections: (page.sections || []).map((section) => resolveSectionLayout(section)),
 });
 
+const parseDimension = (value, fallback = 0) => {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const match = value.match(/-?\d+(\.\d+)?/);
+    if (match) return Number(match[0]);
+  }
+  return fallback;
+};
+
+const ratioPresets = [
+  '12', '6:6', '4:8', '8:4', '3:3:3:3', '3:6:3', '2:8:2', '4:4:4',
+];
+
+const normalizeRatioString = (ratio, count = 1) => {
+  if (!ratio) {
+    return count <= 1 ? '12' : Array.from({ length: count }, () => 12 / count).join(':');
+  }
+  return String(ratio);
+};
+
+const getChildElementsForColumn = (elements, columnId) => (
+  elements.filter((element) => element.parentColumnId === columnId && element.type !== 'column')
+);
+
+const applyRowLayout = (section, rowId, overrides = {}) => {
+  const elements = section.elements || [];
+  const row = elements.find((element) => element.id === rowId && element.type === 'row');
+  if (!row) return section;
+
+  const rowContent = { ...(row.content || {}), ...overrides };
+  const columnIds = Array.isArray(rowContent.columnIds) ? rowContent.columnIds : [];
+  const columns = columnIds
+    .map((columnId) => elements.find((element) => element.id === columnId && element.type === 'column'))
+    .filter(Boolean);
+
+  if (!columns.length) {
+    return {
+      ...section,
+      elements: elements.map((element) => (
+        element.id === rowId ? { ...element, content: rowContent } : element
+      )),
+    };
+  }
+
+  const ratioString = normalizeRatioString(rowContent.columnRatio || ratioPresets.find((preset) => preset.split(':').length === columns.length), columns.length);
+  const ratios = ratioString.split(':').map((value) => Math.max(1, parseFloat(value) || 1));
+  while (ratios.length < columns.length) ratios.push(1);
+  const ratioSum = ratios.reduce((sum, value) => sum + value, 0) || columns.length;
+  const rowX = row.position?.x ?? DEFAULT_LEFT;
+  const rowY = row.position?.y ?? DEFAULT_TOP_BASE;
+  const rowWidth = parseDimension(overrides.width || row.style?.width, SECTION_WIDTH_HINT);
+  const rowHeight = parseDimension(overrides.height || row.style?.height, 240);
+  const gap = 24;
+  const usableWidth = Math.max(240, rowWidth - (gap * Math.max(0, columns.length - 1)));
+
+  const nextElements = elements.map((element) => ({ ...element, style: element.style ? { ...element.style } : element.style, content: typeof element.content === 'object' && element.content !== null ? { ...element.content } : element.content }));
+
+  const align = rowContent.align || 'left';
+  const stretchFullWidth = !!rowContent.stretchFullWidth;
+  const rowLeft = stretchFullWidth
+    ? DEFAULT_LEFT
+    : align === 'center'
+      ? snapToGrid((SECTION_WIDTH_HINT - rowWidth) / 2)
+      : align === 'right'
+        ? snapToGrid(Math.max(DEFAULT_LEFT, SECTION_WIDTH_HINT - rowWidth))
+        : rowX;
+
+  const rowIndex = nextElements.findIndex((element) => element.id === rowId);
+  nextElements[rowIndex] = {
+    ...nextElements[rowIndex],
+    position: { x: snapToGrid(rowLeft), y: snapToGrid(rowY) },
+    style: {
+      ...nextElements[rowIndex].style,
+      width: `${snapToGrid(stretchFullWidth ? SECTION_WIDTH_HINT : rowWidth)}px`,
+      height: `${snapToGrid(rowHeight)}px`,
+    },
+    content: {
+      ...nextElements[rowIndex].content,
+      ...rowContent,
+      columnRatio: ratioString,
+    },
+  };
+
+  let offsetX = rowLeft;
+  columns.forEach((column, index) => {
+    const nextColumnWidth = Math.max(120, Math.round((usableWidth * ratios[index]) / ratioSum));
+    const nextColumnHeight = rowContent.equalColumnHeight ? rowHeight : parseDimension(column.style?.height, rowHeight);
+    const oldColumnX = column.position?.x ?? offsetX;
+    const oldColumnY = column.position?.y ?? rowY;
+    const oldColumnWidth = Math.max(120, parseDimension(column.style?.width, nextColumnWidth));
+    const oldColumnHeight = Math.max(48, parseDimension(column.style?.height, rowHeight));
+    const nextColumnX = snapToGrid(offsetX);
+    const nextColumnY = snapToGrid(rowY);
+    const columnIndex = nextElements.findIndex((element) => element.id === column.id);
+    nextElements[columnIndex] = {
+      ...nextElements[columnIndex],
+      position: { x: nextColumnX, y: nextColumnY },
+      style: {
+        ...nextElements[columnIndex].style,
+        width: `${snapToGrid(nextColumnWidth)}px`,
+        height: `${snapToGrid(nextColumnHeight)}px`,
+      },
+      content: {
+        ...nextElements[columnIndex].content,
+        ratio: ratios[index],
+        index,
+      },
+    };
+
+    getChildElementsForColumn(nextElements, column.id).forEach((child) => {
+      if (child.id === column.id || child.type === 'row') return;
+      const childIndex = nextElements.findIndex((element) => element.id === child.id);
+      const childWidth = estimateElementSize(child, oldColumnWidth).width;
+      const oldRelativeX = oldColumnWidth > 0 ? (child.position.x - oldColumnX) / oldColumnWidth : 0;
+      const nextX = nextColumnX + Math.max(8, Math.min(nextColumnWidth - childWidth - 8, Math.round(oldRelativeX * nextColumnWidth)));
+      let nextY = child.position.y - oldColumnY + nextColumnY;
+      if (rowContent.equalColumnHeight) {
+        const columnChildren = getChildElementsForColumn(nextElements, column.id).filter((element) => element.type !== 'box');
+        const contentHeight = columnChildren.reduce((max, element) => {
+          const position = element.id === child.id ? { x: nextX, y: nextY } : element.position;
+          return Math.max(max, (position?.y || nextColumnY) - nextColumnY + estimateElementSize(element, nextColumnWidth).height);
+        }, 0);
+        const available = Math.max(0, nextColumnHeight - contentHeight);
+        if ((rowContent.verticalAlign || 'top') === 'center') nextY += Math.round(available / 2);
+        if ((rowContent.verticalAlign || 'top') === 'bottom') nextY += available;
+      }
+      nextElements[childIndex] = {
+        ...nextElements[childIndex],
+        position: {
+          x: snapToGrid(nextX),
+          y: snapToGrid(nextY),
+        },
+        parentRowId: rowId,
+        parentColumnId: column.id,
+      };
+    });
+
+    offsetX += nextColumnWidth + gap;
+  });
+
+  return {
+    ...section,
+    elements: nextElements,
+  };
+};
+
 export const createDefaultElement = (type) => {
   const id = generateId();
   const defaults = {
@@ -293,6 +439,18 @@ const builderReducer = (state, action) => {
             )
           }, action.elementId);
         })
+      };
+      return { ...state, page: newPage, ...pushHistory(state, newPage) };
+    }
+
+    case 'UPDATE_ROW_LAYOUT': {
+      newPage = {
+        ...state.page,
+        sections: state.page.sections.map((section) => (
+          section.elements.some((element) => element.id === action.rowId)
+            ? resolveSectionLayout(applyRowLayout(section, action.rowId, action.updates || {}), action.rowId)
+            : section
+        )),
       };
       return { ...state, page: newPage, ...pushHistory(state, newPage) };
     }
