@@ -1,5 +1,6 @@
 import { createContext, useContext, useReducer, useCallback, useEffect, useRef } from 'react';
 import { initRustCanvasEngine, tryApplyRustMutation } from '@/lib/rustCanvasEngine';
+import { estimateElementSize } from '@/utils/responsiveLayout';
 
 const BuilderContext = createContext();
 
@@ -8,6 +9,8 @@ const SNAP_GRID = 8;
 const DEFAULT_LEFT = 24;
 const DEFAULT_TOP_BASE = 36;
 const DEFAULT_TOP_GAP = 120;
+const COLLISION_GAP = 16;
+const SECTION_WIDTH_HINT = 760;
 
 const snapToGrid = (value) => Math.round(value / SNAP_GRID) * SNAP_GRID;
 const getDefaultPosition = (index = 0) => ({
@@ -28,12 +31,84 @@ const ensureElementPosition = (element, index = 0) => {
   return { ...element, position: defaultPos };
 };
 
+const isSurfaceElement = (element) => !!element?.surface;
+const isBlockingElement = (element) => !isSurfaceElement(element) && element?.type !== 'spacer';
+
+const buildRect = (element, position, widthHint = SECTION_WIDTH_HINT) => {
+  const size = estimateElementSize(element, widthHint);
+  return {
+    x: position.x,
+    y: position.y,
+    width: size.width,
+    height: size.height,
+  };
+};
+
+const rectsOverlap = (a, b) => (
+  a.x < b.x + b.width &&
+  a.x + a.width > b.x &&
+  a.y < b.y + b.height &&
+  a.y + a.height > b.y
+);
+
+const resolveElementCollisions = (elements = [], prioritizedElementId = null) => {
+  const positioned = elements.map((element, index) => ensureElementPosition(element, index));
+  const sorted = [...positioned].sort((left, right) => {
+    if (prioritizedElementId && left.id !== right.id) {
+      if (left.id === prioritizedElementId) return 1;
+      if (right.id === prioritizedElementId) return -1;
+    }
+    const leftPos = left.position || getDefaultPosition(0);
+    const rightPos = right.position || getDefaultPosition(0);
+    if (leftPos.y !== rightPos.y) return leftPos.y - rightPos.y;
+    return leftPos.x - rightPos.x;
+  });
+
+  const resolved = [];
+  const blockingRects = [];
+
+  sorted.forEach((element) => {
+    if (!isBlockingElement(element)) {
+      resolved.push(element);
+      return;
+    }
+
+    let nextPosition = {
+      x: snapToGrid(element.position.x),
+      y: snapToGrid(element.position.y),
+    };
+    let nextRect = buildRect(element, nextPosition);
+    let overlap = blockingRects.find((rect) => rectsOverlap(nextRect, rect));
+
+    while (overlap) {
+      nextPosition = {
+        ...nextPosition,
+        y: snapToGrid(overlap.y + overlap.height + COLLISION_GAP),
+      };
+      nextRect = buildRect(element, nextPosition);
+      overlap = blockingRects.find((rect) => rectsOverlap(nextRect, rect));
+    }
+
+    const resolvedElement = {
+      ...element,
+      position: nextPosition,
+    };
+
+    resolved.push(resolvedElement);
+    blockingRects.push(nextRect);
+  });
+
+  return resolved;
+};
+
+const resolveSectionLayout = (section, prioritizedElementId = null) => ({
+  ...section,
+  elements: resolveElementCollisions(section.elements || [], prioritizedElementId),
+});
+
 const ensurePagePositions = (page) => ({
   ...page,
-  sections: (page.sections || []).map((section) => ({
-    ...section,
-    elements: (section.elements || []).map((element, index) => ensureElementPosition(element, index)),
-  })),
+  sections: (page.sections || []).map((section) => resolveSectionLayout(section)),
 });
 
 export const createDefaultElement = (type) => {
@@ -161,7 +236,7 @@ const builderReducer = (state, action) => {
       newPage = {
         ...state.page,
         sections: state.page.sections.map(s =>
-          s.id === action.sectionId ? { ...s, elements: [...s.elements, element] } : s
+          s.id === action.sectionId ? resolveSectionLayout({ ...s, elements: [...s.elements, element] }, element.id) : s
         )
       };
       return { ...state, page: newPage, ...pushHistory(state, newPage), selectedElementId: element.id, selectedSectionId: action.sectionId };
@@ -182,10 +257,24 @@ const builderReducer = (state, action) => {
         ...state.page,
         sections: state.page.sections.map(s => ({
           ...s,
-          elements: s.elements.map(e =>
-            e.id === action.elementId ? { ...e, ...action.updates } : e
-          )
-        }))
+          elements: s.elements.map(e => {
+            if (e.id !== action.elementId) return e;
+            const nextElement = { ...e, ...action.updates };
+            if (action.updates?.style) {
+              nextElement.style = { ...e.style, ...action.updates.style };
+            }
+            if (action.updates?.content && typeof action.updates.content === 'object' && !Array.isArray(action.updates.content)) {
+              nextElement.content = typeof e.content === 'object' && e.content !== null
+                ? { ...e.content, ...action.updates.content }
+                : action.updates.content;
+            }
+            return nextElement;
+          })
+        })).map((section) => (
+          section.elements.some((element) => element.id === action.elementId)
+            ? resolveSectionLayout(section, action.elementId)
+            : section
+        ))
       };
       return { ...state, page: newPage, ...pushHistory(state, newPage) };
     }
@@ -193,14 +282,17 @@ const builderReducer = (state, action) => {
     case 'MOVE_ELEMENT_POSITION': {
       newPage = {
         ...state.page,
-        sections: state.page.sections.map(s => ({
-          ...s,
-          elements: s.elements.map(e =>
-            e.id === action.elementId
-              ? { ...e, position: { x: snapToGrid(action.x), y: snapToGrid(action.y) } }
-              : e
-          )
-        }))
+        sections: state.page.sections.map(s => {
+          if (!s.elements.some((e) => e.id === action.elementId)) return s;
+          return resolveSectionLayout({
+            ...s,
+            elements: s.elements.map(e =>
+              e.id === action.elementId
+                ? { ...e, position: { x: snapToGrid(action.x), y: snapToGrid(action.y) } }
+                : e
+            )
+          }, action.elementId);
+        })
       };
       return { ...state, page: newPage, ...pushHistory(state, newPage) };
     }
@@ -248,7 +340,9 @@ const builderReducer = (state, action) => {
       newPage = {
         ...state.page,
         sections: withoutEl.map(s =>
-          s.id === action.toSectionId ? { ...s, elements: [...s.elements, element] } : s
+          s.id === action.toSectionId
+            ? resolveSectionLayout({ ...s, elements: [...s.elements, element] }, element.id)
+            : resolveSectionLayout(s)
         )
       };
       return { ...state, page: newPage, ...pushHistory(state, newPage) };
