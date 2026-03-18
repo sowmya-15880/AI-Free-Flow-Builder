@@ -928,6 +928,37 @@
   z-index: 5;
 }
 
+.canvas-element-wrapper.is-surface-element {
+  z-index: 1;
+}
+
+.canvas-element-wrapper.is-leaf-element {
+  z-index: 6;
+}
+
+.canvas-element-wrapper.element-type-row,
+.canvas-element-wrapper.element-type-column,
+.canvas-element-wrapper.element-type-box {
+  border-color: rgba(59, 130, 246, 0.26);
+}
+
+.layout-surface-inner {
+  width: 100%;
+  height: 100%;
+}
+
+.canvas-element-wrapper.element-type-row .layout-surface-inner {
+  background: rgba(15, 23, 42, 0.02);
+}
+
+.canvas-element-wrapper.element-type-column .layout-surface-inner {
+  background: rgba(37, 99, 235, 0.035);
+}
+
+.canvas-element-wrapper.element-type-box .layout-surface-inner {
+  background: rgba(255, 255, 255, 0.78);
+}
+
 .canvas-element-wrapper:hover,
 .canvas-element-wrapper.is-selected {
   border-color: #79c645;
@@ -1237,6 +1268,75 @@
 .fp-align-btn.active {
   border-color: #ff4d79;
   color: #ff4d79;
+}
+
+.fp-row-toggle {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fp-switch {
+  position: relative;
+  display: inline-flex;
+  width: 38px;
+  height: 22px;
+}
+
+.fp-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.fp-switch-slider {
+  position: absolute;
+  inset: 0;
+  background: #d4dae2;
+  border-radius: 999px;
+  transition: background 0.2s ease;
+}
+
+.fp-switch-slider::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  top: 3px;
+  left: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+}
+
+.fp-switch input:checked + .fp-switch-slider {
+  background: #ff4d79;
+}
+
+.fp-switch input:checked + .fp-switch-slider::before {
+  transform: translateX(16px);
+}
+
+.fp-ratio-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.fp-ratio-btn {
+  height: 34px;
+  border: 1px solid #d3d8e0;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #5d6677;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.fp-ratio-btn.active {
+  border-color: #ff4d79;
+  color: #ff4d79;
+  background: rgba(255, 77, 121, 0.06);
 }
 
 .fp-empty-state {

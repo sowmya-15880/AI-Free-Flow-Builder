@@ -43,6 +43,33 @@ const getNearestSectionContent = (x, y) => {
   return best;
 };
 
+const getNearestColumnElement = (x, y, sectionId) => {
+  if (typeof x !== 'number' || typeof y !== 'number') return null;
+  const stack = document.elementsFromPoint(x, y) || [];
+  for (const el of stack) {
+    const columnEl = el.closest?.(`.canvas-element-wrapper[data-element-type="column"]`);
+    if (columnEl && columnEl.dataset.parentRowId) return columnEl;
+  }
+
+  const columnEls = Array.from(document.querySelectorAll(`.canvas-section-content[data-section-id="${sectionId}"] .canvas-element-wrapper[data-element-type="column"]`));
+  if (!columnEls.length) return null;
+  let best = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  columnEls.forEach((columnEl) => {
+    const rect = columnEl.getBoundingClientRect();
+    const clampedX = clamp(x, rect.left, rect.right);
+    const clampedY = clamp(y, rect.top, rect.bottom);
+    const dx = x - clampedX;
+    const dy = y - clampedY;
+    const distance = (dx * dx) + (dy * dy);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = columnEl;
+    }
+  });
+  return best;
+};
+
 function FreeFlowElement({ element, index, sectionId, sectionRef, onGuideChange, isIsolatedTarget, renderPosition, isResponsiveFlow }) {
   const { state, dispatch } = useBuilder();
   const wrapperRef = useRef(null);
@@ -147,15 +174,37 @@ function FreeFlowElement({ element, index, sectionId, sectionRef, onGuideChange,
       const targetProjectedPos = projectPositionInSection(sectionForDrop, event.clientX, event.clientY);
       const projectedX = targetProjectedPos?.x ?? nextPos.x;
       const projectedY = targetProjectedPos?.y ?? nextPos.y;
+      const targetColumn = getNearestColumnElement(event.clientX, event.clientY, targetSectionId);
 
       dispatch({ type: 'MOVE_ELEMENT', elementId: element.id, toSectionId: targetSectionId });
       dispatch({ type: 'MOVE_ELEMENT_POSITION', elementId: element.id, x: projectedX, y: projectedY });
+      if (targetColumn?.dataset?.elementId) {
+        dispatch({
+          type: 'UPDATE_ELEMENT',
+          elementId: element.id,
+          updates: {
+            parentColumnId: targetColumn.dataset.elementId,
+            parentRowId: targetColumn.dataset.parentRowId || null,
+          },
+        });
+      }
       setDragPosition(null);
       stopDragging();
       return;
     }
 
+    const targetColumn = getNearestColumnElement(event.clientX, event.clientY, sectionId);
     dispatch({ type: 'MOVE_ELEMENT_POSITION', elementId: element.id, x: nextPos.x, y: nextPos.y });
+    if (targetColumn?.dataset?.elementId) {
+      dispatch({
+        type: 'UPDATE_ELEMENT',
+        elementId: element.id,
+        updates: {
+          parentColumnId: targetColumn.dataset.elementId,
+          parentRowId: targetColumn.dataset.parentRowId || null,
+        },
+      });
+    }
     setDragPosition(null);
     stopDragging();
   };
@@ -204,10 +253,14 @@ function FreeFlowElement({ element, index, sectionId, sectionRef, onGuideChange,
     <div
       ref={wrapperRef}
       style={{ left: `${currentPosition.x}px`, top: `${currentPosition.y}px` }}
-      className={`canvas-element-wrapper free-flow ${isSelected ? 'is-selected' : ''} ${isIsolatedTarget ? 'is-isolated-target' : ''} ${isDragging ? 'is-dragging-free' : ''} ${isResponsiveFlow ? 'responsive-locked' : ''}`}
+      className={`canvas-element-wrapper free-flow ${element.surface ? 'is-surface-element' : 'is-leaf-element'} element-type-${element.type} ${isSelected ? 'is-selected' : ''} ${isIsolatedTarget ? 'is-isolated-target' : ''} ${isDragging ? 'is-dragging-free' : ''} ${isResponsiveFlow ? 'responsive-locked' : ''}`}
       onClick={handleSelect}
       onPointerDown={handleImagePointerDown}
       data-testid={`canvas-element-${element.id}`}
+      data-element-id={element.id}
+      data-element-type={element.type}
+      data-parent-row-id={element.parentRowId || ''}
+      data-parent-column-id={element.parentColumnId || ''}
     >
       <div className="element-drag-handle" onPointerDown={handleDragStart} title="Drag to move">
         <GripVertical size={11} />

@@ -192,22 +192,24 @@ export default function PromptPage() {
           Edit every element, drag to reorder, and publish when ready.
         </p>
 
-        <div className="prompt-import-bar">
-          <button type="button" className="prompt-import-btn" onClick={handleUploadClick}>
-            <Upload size={16} />
-            Upload Landing Page JSON
-          </button>
-          <span className="prompt-import-note">
-            {uploadedFileName ? `Imported: ${uploadedFileName}` : 'Supports builder JSON and structured landing page JSON files'}
-          </span>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json,application/json"
-            className="prompt-file-input"
-            onChange={handleJsonUpload}
-          />
-        </div>
+        {!loading && (
+          <div className="prompt-import-bar">
+            <button type="button" className="prompt-import-btn" onClick={handleUploadClick}>
+              <Upload size={16} />
+              Upload Landing Page JSON
+            </button>
+            <span className="prompt-import-note">
+              {uploadedFileName ? `Imported: ${uploadedFileName}` : 'Supports builder JSON and structured landing page JSON files'}
+            </span>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,application/json"
+              className="prompt-file-input"
+              onChange={handleJsonUpload}
+            />
+          </div>
+        )}
 
         {loading ? (
           <div className="prompt-loading" data-testid="prompt-loading">

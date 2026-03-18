@@ -79,7 +79,15 @@ function ImageElement({ element }) {
 }
 
 function BoxElement({ element }) {
-  return <div style={element.style} />;
+  return <div className="layout-surface-inner" style={element.style} />;
+}
+
+function RowElement({ element }) {
+  return <div className="layout-surface-inner layout-row-inner" style={element.style} />;
+}
+
+function ColumnElement({ element }) {
+  return <div className="layout-surface-inner layout-column-inner" style={element.style} />;
 }
 
 function ButtonElement({ element, editable, onContentChange }) {
@@ -297,6 +305,8 @@ function SpacerElement({ element }) {
 
 const ElementRenderer = memo(function ElementRenderer({ element, editable = false, onContentChange = null }) {
   switch (element.type) {
+    case 'row': return <RowElement element={element} />;
+    case 'column': return <ColumnElement element={element} />;
     case 'box': return <BoxElement element={element} />;
     case 'heading': return <HeadingElement element={element} editable={editable} onContentChange={onContentChange} />;
     case 'paragraph': return <ParagraphElement element={element} editable={editable} onContentChange={onContentChange} />;

@@ -71,6 +71,18 @@ function PropSelect({ label, value, onChange, options }) {
   );
 }
 
+function PropToggle({ label, checked, onChange }) {
+  return (
+    <div className="fp-row fp-row-toggle">
+      <label className="fp-label">{label}</label>
+      <label className="fp-switch">
+        <input type="checkbox" checked={!!checked} onChange={(e) => onChange(e.target.checked)} />
+        <span className="fp-switch-slider" />
+      </label>
+    </div>
+  );
+}
+
 function AlignPicker({ value, onChange }) {
   return (
     <div className="fp-row">
@@ -211,6 +223,61 @@ function BoxProps({ el, us }) {
       <PropInput label="Border Radius" value={el.style?.borderRadius} onChange={v => us('borderRadius', v)} />
       <PropInput label="Border" value={el.style?.border} onChange={v => us('border', v)} />
       <PropInput label="Shadow" value={el.style?.boxShadow} onChange={v => us('boxShadow', v)} />
+    </div>
+  </>;
+}
+
+const ROW_RATIO_OPTIONS = [
+  '12', '6:6', '4:8', '8:4', '3:3:3:3', '3:6:3', '2:8:2', '4:4:4',
+];
+
+function RowProps({ el, dispatch }) {
+  const updateRow = (updates) => dispatch({ type: 'UPDATE_ROW_LAYOUT', rowId: el.id, updates });
+  const activeRatio = el.content?.columnRatio || '12';
+  return <>
+    <div className="fp-section">
+      <div className="fp-section-title">Ratio</div>
+      <div className="fp-ratio-grid">
+        {ROW_RATIO_OPTIONS.map((ratio) => (
+          <button
+            key={ratio}
+            className={`fp-ratio-btn ${activeRatio === ratio ? 'active' : ''}`}
+            onClick={() => updateRow({ columnRatio: ratio })}
+            type="button"
+          >
+            {ratio}
+          </button>
+        ))}
+      </div>
+    </div>
+    <div className="fp-section">
+      <div className="fp-section-title">Layout</div>
+      <PropToggle label="Equal column height" checked={el.content?.equalColumnHeight} onChange={(value) => updateRow({ equalColumnHeight: value })} />
+      <PropSelect label="Vertical Alignment" value={el.content?.verticalAlign || 'top'} onChange={(value) => updateRow({ verticalAlign: value })} options={[
+        { value: 'top', label: 'Top' },
+        { value: 'center', label: 'Center' },
+        { value: 'bottom', label: 'Bottom' },
+      ]} />
+      <PropSelect label="Align" value={el.content?.align || 'left'} onChange={(value) => updateRow({ align: value })} options={[
+        { value: 'left', label: 'Left' },
+        { value: 'center', label: 'Center' },
+        { value: 'right', label: 'Right' },
+      ]} />
+      <PropToggle label="Stretch Full Width" checked={el.content?.stretchFullWidth} onChange={(value) => updateRow({ stretchFullWidth: value })} />
+      <PropInput label="Row Width" value={el.style?.width} onChange={(value) => updateRow({ width: value })} />
+      <PropInput label="Row Height" value={el.style?.height} onChange={(value) => updateRow({ height: value })} />
+    </div>
+  </>;
+}
+
+function ColumnProps({ el, us }) {
+  return <>
+    <div className="fp-section">
+      <div className="fp-section-title">Column</div>
+      <PropInput label="Width" value={el.style?.width} onChange={(value) => us('width', value)} />
+      <PropInput label="Height" value={el.style?.height} onChange={(value) => us('height', value)} />
+      <PropColor label="Background" value={el.style?.backgroundColor} onChange={(value) => us('backgroundColor', value)} />
+      <PropInput label="Border Radius" value={el.style?.borderRadius} onChange={(value) => us('borderRadius', value)} />
     </div>
   </>;
 }
@@ -369,6 +436,8 @@ export default function PropertiesPanel() {
       return <InactiveTabState label={currentTabLabel} />;
     }
 
+    if (el?.type === 'row') return <RowProps el={el} dispatch={dispatch} />;
+    if (el?.type === 'column') return <ColumnProps el={el} us={us} />;
     if (el?.type === 'heading') return <HeadingProps el={el} us={us} />;
     if (el?.type === 'paragraph') return <ParagraphProps el={el} us={us} />;
     if (el?.type === 'image') return <ImageProps el={el} us={us} dispatch={dispatch} />;

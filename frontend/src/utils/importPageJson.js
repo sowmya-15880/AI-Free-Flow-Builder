@@ -117,7 +117,17 @@ const hasVisualSurface = (element) => {
     || hasShadow(element);
 };
 
-const createSurfaceElement = ({ x, y, width, height, element, kind = 'box' }) => {
+const createSurfaceElement = ({
+  id,
+  x,
+  y,
+  width,
+  height,
+  element,
+  kind = 'box',
+  content = {},
+  meta = {},
+}) => {
   const background = element?.background || {};
   const style = {
     width: `${Math.max(80, width)}px`,
@@ -134,10 +144,13 @@ const createSurfaceElement = ({ x, y, width, height, element, kind = 'box' }) =>
     style.backgroundRepeat = 'no-repeat';
   }
   return {
-    id: makeId(kind),
-    type: 'box',
+    id: id || makeId(kind),
+    type: kind,
     content: '',
     position: { x: snap(x), y: snap(y) },
+    surface: true,
+    ...meta,
+    content,
     style,
   };
 };
@@ -204,7 +217,7 @@ const deriveSectionStyle = (sectionNode) => {
   return style;
 };
 
-const mapLeafNode = (node, x, y, width) => {
+const mapLeafNode = (node, x, y, width, meta = {}) => {
   const element = node.element || {};
   const spacing = getNodeSpacing(node);
   const marginTop = getSpacingValue(spacing.margin, 'top');
@@ -220,6 +233,7 @@ const mapLeafNode = (node, x, y, width) => {
       id: makeId('heading'),
       type: 'heading',
       content,
+      ...meta,
       position: { x: snap(x), y: snap(nextY) },
       style: {
         ...baseStyle,
@@ -239,6 +253,7 @@ const mapLeafNode = (node, x, y, width) => {
       id: makeId('paragraph'),
       type: 'paragraph',
       content,
+      ...meta,
       position: { x: snap(x), y: snap(nextY) },
       style: {
         ...baseStyle,
@@ -258,6 +273,7 @@ const mapLeafNode = (node, x, y, width) => {
       id: makeId('button'),
       type: 'button',
       content,
+      ...meta,
       position: { x: snap(x), y: snap(nextY) },
       style: {
         backgroundColor: element.background?.color?.background_color || element.button_bg?.color || '#2563eb',
@@ -283,6 +299,7 @@ const mapLeafNode = (node, x, y, width) => {
     const mapped = {
       id: makeId('image'),
       type: 'image',
+      ...meta,
       content: {
         src,
         alt: element.alt || 'Imported image',
@@ -306,6 +323,7 @@ const mapLeafNode = (node, x, y, width) => {
     const mapped = {
       id: makeId('form'),
       type: 'form',
+      ...meta,
       content: {
         fields: [
           { label: 'Name', type: 'text', placeholder: 'Enter your name' },
@@ -338,6 +356,7 @@ const mapLeafNode = (node, x, y, width) => {
       id: makeId('heading'),
       type: 'heading',
       content,
+      ...meta,
       position: { x: snap(x), y: snap(nextY) },
       style: {
         ...baseStyle,
@@ -357,6 +376,7 @@ const mapLeafNode = (node, x, y, width) => {
       id: makeId('spacer'),
       type: 'spacer',
       content: '',
+      ...meta,
       position: { x: snap(x), y: snap(nextY) },
       style: { height: `${height}px`, width: '100%' },
     };
@@ -369,12 +389,11 @@ const mapLeafNode = (node, x, y, width) => {
 const convertGraphPage = (rawPage) => {
   const elementsById = rawPage.elements || {};
 
-  const processNode = (nodeId, layout, acc) => {
+  const processNode = (nodeId, layout, acc, parentMeta = {}) => {
     const node = elementsById[nodeId];
     if (!node) return 0;
 
     if (node.type === 'row') {
-      const surfaceIndex = acc.length;
       const columns = node.columns || [];
       const nodeElement = node.element || {};
       const rowSpacing = getNodeSpacing(node);
@@ -388,33 +407,57 @@ const convertGraphPage = (rawPage) => {
       const innerWidth = Math.max(260, layout.width - paddingLeft - paddingRight);
       const ratios = parseRatioList(node.element?.column_ratio, columns.length);
       const ratioSum = ratios.reduce((sum, value) => sum + value, 0) || columns.length || 1;
+      const rowId = node.elementId || makeId('row');
+      const rowElement = createSurfaceElement({
+        id: rowId,
+        x: layout.x,
+        y: layout.y + marginTop,
+        width: layout.width,
+        height: 48,
+        element: nodeElement,
+        kind: 'row',
+        content: {
+          columnIds: [],
+          columnRatio: node.element?.column_ratio || Array.from({ length: columns.length }, () => 1).join(':'),
+          equalColumnHeight: !!nodeElement.equal_column_height,
+          verticalAlign: nodeElement.vertical_alignment || 'top',
+          align: nodeElement.align || 'left',
+          stretchFullWidth: !!nodeElement.stretch_full_width,
+        },
+        meta: parentMeta,
+      });
+      acc.push(rowElement);
       let offsetX = innerX;
       let rowHeight = 0;
+      const columnIds = [];
 
       columns.forEach((columnId, index) => {
         const columnWidth = Math.round((innerWidth * ratios[index]) / ratioSum);
-        const consumed = processNode(columnId, { x: offsetX, y: layout.y + marginTop + paddingTop, width: columnWidth }, acc);
+        const columnNode = elementsById[columnId];
+        const resolvedColumnId = columnNode?.elementId || columnId || makeId('column');
+        const consumed = processNode(
+          columnId,
+          { x: offsetX, y: layout.y + marginTop + paddingTop, width: columnWidth },
+          acc,
+          { ...parentMeta, parentRowId: rowId, columnRatio: ratios[index], columnIndex: index, explicitColumnId: resolvedColumnId }
+        );
         rowHeight = Math.max(rowHeight, consumed);
+        columnIds.push(resolvedColumnId);
         offsetX += columnWidth;
       });
 
       const totalRowHeight = rowHeight + paddingBottom;
-      if (hasVisualSurface(nodeElement)) {
-        acc.splice(surfaceIndex, 0, createSurfaceElement({
-          x: layout.x,
-          y: layout.y + marginTop,
-          width: layout.width,
-          height: totalRowHeight,
-          element: nodeElement,
-          kind: 'row',
-        }));
-      }
+      rowElement.content = { ...rowElement.content, columnIds };
+      rowElement.style = {
+        ...rowElement.style,
+        width: `${Math.max(120, layout.width)}px`,
+        height: `${Math.max(48, totalRowHeight)}px`,
+      };
 
       return totalRowHeight + marginTop + marginBottom + paddingTop;
     }
 
     if (node.type === 'column' || node.type === 'box') {
-      const surfaceIndex = acc.length;
       const children = node.elements || [];
       const nodeElement = node.element || {};
       const spacing = getNodeSpacing(node);
@@ -427,36 +470,74 @@ const convertGraphPage = (rawPage) => {
       let cursorY = layout.y + marginTop + paddingTop;
       const innerX = layout.x + paddingLeft;
       const innerWidth = Math.max(220, layout.width - paddingLeft - paddingRight);
+      const surfaceId = node.type === 'column'
+        ? (parentMeta.explicitColumnId || node.elementId || makeId(node.type))
+        : (node.elementId || makeId(node.type));
+      const elementType = node.type === 'column' ? 'column' : 'box';
+      const surfaceElement = createSurfaceElement({
+        id: surfaceId,
+        x: layout.x,
+        y: layout.y + marginTop,
+        width: layout.width,
+        height: 48,
+        element: nodeElement,
+        kind: elementType,
+        content: node.type === 'column'
+          ? {
+              ratio: parentMeta.columnRatio || 1,
+              index: parentMeta.columnIndex || 0,
+              parentRowId: parentMeta.parentRowId || null,
+            }
+          : {},
+        meta: {
+          parentRowId: parentMeta.parentRowId || null,
+          parentColumnId: node.type === 'box' ? parentMeta.parentColumnId || null : null,
+          parentBoxId: node.type === 'box' ? parentMeta.parentBoxId || null : null,
+        },
+      });
+      acc.push(surfaceElement);
 
       children.forEach((childId) => {
         const childNode = elementsById[childId];
         if (!childNode) return;
         if (childNode.type === 'row' || childNode.type === 'column' || childNode.type === 'box') {
-          const consumed = processNode(childId, { x: innerX, y: cursorY, width: innerWidth }, acc);
+          const childMeta = node.type === 'column'
+            ? {
+                ...parentMeta,
+                parentRowId: parentMeta.parentRowId || null,
+                parentColumnId: surfaceId,
+                explicitColumnId: null,
+              }
+            : {
+                ...parentMeta,
+                parentColumnId: parentMeta.parentColumnId || null,
+                parentBoxId: surfaceId,
+                explicitColumnId: null,
+              };
+          const consumed = processNode(childId, { x: innerX, y: cursorY, width: innerWidth }, acc, childMeta);
           cursorY += consumed + 12;
           return;
         }
-        const mapped = mapLeafNode(childNode, innerX, cursorY, innerWidth);
+        const mapped = mapLeafNode(childNode, innerX, cursorY, innerWidth, {
+          parentRowId: parentMeta.parentRowId || null,
+          parentColumnId: node.type === 'column' ? surfaceId : parentMeta.parentColumnId || null,
+          parentBoxId: node.type === 'box' ? surfaceId : parentMeta.parentBoxId || null,
+        });
         if (mapped.element) acc.push(mapped.element);
         cursorY += mapped.consumedHeight || 0;
       });
 
       const totalHeight = Math.max(0, cursorY - layout.y + paddingBottom + marginBottom);
-      if (node.type === 'box' && hasVisualSurface(nodeElement)) {
-        acc.splice(surfaceIndex, 0, createSurfaceElement({
-          x: layout.x,
-          y: layout.y + marginTop,
-          width: layout.width,
-          height: Math.max(48, totalHeight - marginTop - marginBottom),
-          element: nodeElement,
-          kind: 'box',
-        }));
-      }
+      surfaceElement.style = {
+        ...surfaceElement.style,
+        width: `${Math.max(120, layout.width)}px`,
+        height: `${Math.max(48, totalHeight - marginTop - marginBottom)}px`,
+      };
 
       return totalHeight;
     }
 
-    const mapped = mapLeafNode(node, layout.x, layout.y, layout.width);
+    const mapped = mapLeafNode(node, layout.x, layout.y, layout.width, parentMeta);
     if (mapped.element) acc.push(mapped.element);
     return mapped.consumedHeight || 0;
   };
