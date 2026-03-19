@@ -139,7 +139,7 @@ function FormElement({ element, editable, onContentChange }) {
     <div style={style}>
       {fields.map((field, i) => (
         <div key={i} style={{ marginBottom: 14 }}>
-          <label style={{ display: 'block', fontWeight: 600, marginBottom: 5, fontSize: 14, color: '#374151' }}>
+          <label style={{ display: 'block', fontWeight: 600, marginBottom: 5, fontSize: 14, color: style.inputTextColor || '#374151' }}>
             {field.label}
           </label>
           {field.type === 'textarea' ? (
@@ -165,12 +165,13 @@ function FormElement({ element, editable, onContentChange }) {
           color: style.buttonTextColor || 'white',
           padding: '12px 28px',
           border: 'none',
-          borderRadius: 8,
+          borderRadius: style.inputBorderRadius || 999,
           fontSize: 15,
           fontWeight: 600,
           width: '100%',
           fontFamily: 'inherit',
-          textAlign: 'center'
+          textAlign: 'center',
+          boxSizing: 'border-box',
         }}
         contentEditable={!!editable}
         suppressContentEditableWarning
@@ -193,6 +194,16 @@ function IconElement({ element }) {
   const iconName = content.name || 'Star';
   const size = content.size || 48;
   const IconComp = ICON_MAP[iconName] || LucideIcons.Star;
+
+  if (content.svg) {
+    return (
+      <div
+        className="inline-svg-icon"
+        style={element.style}
+        dangerouslySetInnerHTML={{ __html: content.svg }}
+      />
+    );
+  }
 
   return (
     <div style={element.style}>

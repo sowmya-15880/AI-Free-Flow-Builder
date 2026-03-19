@@ -4,6 +4,7 @@ const SECTION_SIDE_PADDING = 32;
 
 const snap = (value) => Math.max(0, Math.round((Number(value) || 0) / GRID) * GRID);
 const makeId = (prefix = 'imp') => `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+const rgbaAlphaRegex = /rgba?\(([^)]+)\)/i;
 
 const decodeHtml = (value) => {
   if (!value) return '';
@@ -109,6 +110,52 @@ const buildBorder = (element) => {
 
 const getRadius = (element, fallback = 12) => `${toPx(element?.border?.radius?.size, fallback)}px`;
 
+const getBackgroundColor = (element) => element?.background?.color?.background_color || '';
+
+const parseColorChannels = (color) => {
+  if (!color || typeof color !== 'string') return null;
+  const trimmed = color.trim();
+  if (trimmed.startsWith('#')) {
+    const hex = trimmed.replace('#', '');
+    const normalized = hex.length === 3
+      ? hex.split('').map((char) => char + char).join('')
+      : hex;
+    if (normalized.length !== 6) return null;
+    return {
+      r: parseInt(normalized.slice(0, 2), 16),
+      g: parseInt(normalized.slice(2, 4), 16),
+      b: parseInt(normalized.slice(4, 6), 16),
+      a: 1,
+    };
+  }
+  const match = trimmed.match(rgbaAlphaRegex);
+  if (!match) return null;
+  const parts = match[1].split(',').map((part) => part.trim());
+  if (parts.length < 3) return null;
+  return {
+    r: Number(parts[0]),
+    g: Number(parts[1]),
+    b: Number(parts[2]),
+    a: parts[3] !== undefined ? Number(parts[3]) : 1,
+  };
+};
+
+const getColorLuminance = (color) => {
+  const channels = parseColorChannels(color);
+  if (!channels) return 1;
+  const normalize = (value) => {
+    const scaled = value / 255;
+    return scaled <= 0.03928 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4;
+  };
+  return (0.2126 * normalize(channels.r)) + (0.7152 * normalize(channels.g)) + (0.0722 * normalize(channels.b));
+};
+
+const inferTone = ({ backgroundColor = '', hasImage = false, parentTone = 'light' }) => {
+  if (hasImage) return 'dark';
+  if (!backgroundColor) return parentTone;
+  return getColorLuminance(backgroundColor) < 0.34 ? 'dark' : 'light';
+};
+
 const hasVisualSurface = (element) => {
   const background = element?.background || {};
   return background.type === 'image'
@@ -129,19 +176,40 @@ const createSurfaceElement = ({
   meta = {},
 }) => {
   const background = element?.background || {};
+  const explicitBackgroundColor = getBackgroundColor(element);
+  const surfaceTone = inferTone({
+    backgroundColor: explicitBackgroundColor,
+    hasImage: !!background.image?.image_url,
+    parentTone: meta.sectionTone || 'light',
+  });
+  const fallbackBackground = kind === 'box'
+    ? (surfaceTone === 'dark' ? 'rgba(255,255,255,0.14)' : '#ffffff')
+    : kind === 'row'
+      ? 'transparent'
+      : 'transparent';
   const style = {
     width: `${Math.max(80, width)}px`,
     height: `${Math.max(32, height)}px`,
-    backgroundColor: background?.color?.background_color || 'transparent',
-    borderRadius: getRadius(element, 12),
-    border: buildBorder(element),
-    boxShadow: buildShadow(element),
+    backgroundColor: explicitBackgroundColor || fallbackBackground,
+    borderRadius: getRadius(element, kind === 'box' ? 18 : 12),
+    border: buildBorder(element) || (kind === 'box' && surfaceTone === 'dark' ? '1px solid rgba(255,255,255,0.16)' : undefined),
+    boxShadow: buildShadow(element) || (kind === 'box' ? '0 24px 48px rgba(15,23,42,0.12)' : kind === 'row' && explicitBackgroundColor ? '0 12px 32px rgba(15,23,42,0.08)' : undefined),
   };
-  if (background.type === 'image' && background.image?.image_url) {
+  if (background.image?.image_url) {
     style.backgroundImage = `url(${background.image.image_url})`;
     style.backgroundSize = background.image.image_size || 'cover';
     style.backgroundPosition = (background.image.image_position || 'center').replace(/-/g, ' ');
     style.backgroundRepeat = 'no-repeat';
+    if (background.type !== 'image' && explicitBackgroundColor) {
+      style.backgroundBlendMode = 'overlay';
+    }
+  }
+  if (kind === 'box' && style.backgroundColor.includes('rgba')) {
+    style.backdropFilter = 'blur(14px)';
+    style.webkitBackdropFilter = 'blur(14px)';
+  }
+  if (kind === 'column') {
+    style.backgroundColor = explicitBackgroundColor || 'transparent';
   }
   return {
     id: id || makeId(kind),
@@ -150,7 +218,7 @@ const createSurfaceElement = ({
     position: { x: snap(x), y: snap(y) },
     surface: true,
     ...meta,
-    content,
+    content: { ...content, tone: surfaceTone },
     style,
   };
 };
@@ -200,19 +268,36 @@ const extractFontWeight = (typography, fallback = 600) => {
   return Number.isFinite(parsed) ? parsed : value;
 };
 
+const getLeafColor = (explicitColor, tone, fallbackLight = '#111827', fallbackDark = '#ffffff') => (
+  explicitColor && explicitColor.trim() ? explicitColor : (tone === 'dark' ? fallbackDark : fallbackLight)
+);
+
+const getLeafFontSize = ({ nodeType, typography, width, tone }) => {
+  const explicit = typography?.font?.size;
+  if (explicit) return `${toPx(explicit, nodeType === 'heading' ? 36 : 16)}px`;
+  if (nodeType === 'heading') {
+    if (width >= 460) return tone === 'dark' ? '56px' : '44px';
+    if (width >= 320) return '34px';
+    return '26px';
+  }
+  if (nodeType === 'iconHeading') return '18px';
+  return width >= 440 ? '18px' : '16px';
+};
+
 const deriveSectionStyle = (sectionNode) => {
   const element = sectionNode?.element || {};
   const background = element.background || {};
   const backgroundColor = background?.color?.background_color || '#ffffff';
   const style = {
     backgroundColor,
-    padding: getPaddingShorthand(element.spacing?.padding),
+    padding: getPaddingShorthand(element.spacing?.padding || { size: '72', even: true }),
   };
   if (background.type === 'image' && background.image?.image_url) {
     style.backgroundImage = `url(${background.image.image_url})`;
     style.backgroundSize = background.image.image_size || 'cover';
-    style.backgroundPosition = (background.image.image_position || 'center').replace('-', ' ');
+    style.backgroundPosition = (background.image.image_position || 'center').replace(/-/g, ' ');
     style.backgroundRepeat = 'no-repeat';
+    style.backgroundBlendMode = 'multiply';
   }
   return style;
 };
@@ -223,6 +308,7 @@ const mapLeafNode = (node, x, y, width, meta = {}) => {
   const marginTop = getSpacingValue(spacing.margin, 'top');
   const marginBottom = getSpacingValue(spacing.margin, 'bottom');
   const nextY = y + marginTop;
+  const tone = meta.sectionTone || 'light';
   const baseStyle = {
     textAlign: element.align || 'left',
   };
@@ -237,11 +323,13 @@ const mapLeafNode = (node, x, y, width, meta = {}) => {
       position: { x: snap(x), y: snap(nextY) },
       style: {
         ...baseStyle,
-        fontSize: extractFontSize(element.typography, 36),
+        fontSize: getLeafFontSize({ nodeType: 'heading', typography: element.typography, width, tone }),
         fontWeight: extractFontWeight(element.typography, 700),
-        color: element.typography?.color || '#111827',
-        lineHeight: element.typography?.line_height || '1.2',
+        color: getLeafColor(element.typography?.color, tone),
+        lineHeight: element.typography?.line_height || (tone === 'dark' ? '1.08' : '1.16'),
         maxWidth: `${Math.max(240, width - 16)}px`,
+        letterSpacing: '-0.03em',
+        margin: element.align === 'center' ? '0 auto' : '0',
       },
     };
     return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 12 };
@@ -257,11 +345,12 @@ const mapLeafNode = (node, x, y, width, meta = {}) => {
       position: { x: snap(x), y: snap(nextY) },
       style: {
         ...baseStyle,
-        fontSize: extractFontSize(element.typography, 16),
+        fontSize: getLeafFontSize({ nodeType: 'text', typography: element.typography, width, tone }),
         fontWeight: extractFontWeight(element.typography, 400),
-        color: element.typography?.color || '#4b5563',
+        color: getLeafColor(element.typography?.color, tone, '#4b5563', 'rgba(255,255,255,0.82)'),
         lineHeight: element.typography?.line_height || '1.6',
         maxWidth: `${Math.max(240, width - 16)}px`,
+        margin: element.align === 'center' ? '0 auto' : '0',
       },
     };
     return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 10 };
@@ -276,16 +365,17 @@ const mapLeafNode = (node, x, y, width, meta = {}) => {
       ...meta,
       position: { x: snap(x), y: snap(nextY) },
       style: {
-        backgroundColor: element.background?.color?.background_color || element.button_bg?.color || '#2563eb',
-        color: element.typography?.color || '#ffffff',
-        padding: '12px 24px',
-        borderRadius: `${toPx(element.border?.radius?.size, 12)}px`,
-        fontSize: extractFontSize(element.typography, 15),
+        backgroundColor: element.background?.color?.background_color || element.button_bg?.color || (tone === 'dark' ? '#ffffff' : '#2563eb'),
+        color: element.typography?.color || (tone === 'dark' ? '#2252d1' : '#ffffff'),
+        padding: '12px 28px',
+        borderRadius: `${toPx(element.border?.radius?.size, 999)}px`,
+        fontSize: getLeafFontSize({ nodeType: 'button', typography: element.typography, width, tone }),
         fontWeight: extractFontWeight(element.typography, 700),
         textAlign: element.align || 'center',
         display: 'inline-block',
         border: buildBorder(element),
         boxShadow: buildShadow(element),
+        margin: element.align === 'center' ? '0 auto' : '0',
       },
     };
     return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 10 };
@@ -309,11 +399,12 @@ const mapLeafNode = (node, x, y, width, meta = {}) => {
         width: `${Math.max(180, maxWidth)}px`,
         maxWidth: `${Math.max(180, maxWidth)}px`,
         height: explicitHeight ? `${explicitHeight}px` : 'auto',
-        borderRadius: element.style === 'circle' ? '999px' : `${toPx(element.border?.radius?.size, 12)}px`,
+        borderRadius: element.style === 'circle' ? '999px' : `${toPx(element.border?.radius?.size, src.includes('/logo/') ? 0 : 14)}px`,
         display: 'block',
         objectFit: element.size === 'fit' ? 'contain' : 'cover',
         border: buildBorder(element),
         boxShadow: buildShadow(element),
+        margin: element.align === 'center' ? '0 auto' : element.align === 'right' ? '0 0 0 auto' : '0',
       },
     };
     return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 16 };
@@ -333,8 +424,8 @@ const mapLeafNode = (node, x, y, width, meta = {}) => {
       },
       position: { x: snap(x), y: snap(nextY) },
       style: {
-        padding: '24px',
-        backgroundColor: element.input_bg?.color || '#ffffff',
+        padding: '24px 20px',
+        backgroundColor: element.input_bg?.color || (tone === 'dark' ? 'rgba(255,255,255,0.12)' : '#ffffff'),
         borderRadius: `${toPx(element.input_border?.radius?.size, 16)}px`,
         maxWidth: `${Math.max(280, width - 16)}px`,
         buttonBackgroundColor: element.button_bg?.color || '#2CB24C',
@@ -345,6 +436,7 @@ const mapLeafNode = (node, x, y, width, meta = {}) => {
         inputBorderRadius: `${toPx(element.input_border?.radius?.size, 12)}px`,
         border: buildBorder(element),
         boxShadow: buildShadow(element),
+        margin: element.align === 'center' ? '0 auto' : '0',
       },
     };
     return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 20 };
@@ -352,22 +444,46 @@ const mapLeafNode = (node, x, y, width, meta = {}) => {
 
   if (node.type === 'iconHeading') {
     const content = decodeHtml(element.heading_content || 'Imported item');
-    const mapped = {
+    const iconMapped = {
+      id: makeId('icon'),
+      type: 'icon',
+      ...meta,
+      content: {
+        name: 'Star',
+        size: 18,
+        svg: element.icon_content || '',
+      },
+      position: { x: snap(x), y: snap(nextY + 2) },
+      style: {
+        width: '28px',
+        height: '28px',
+        color: element.icon_color || '#2f66f5',
+        backgroundColor: element.icon_bg_color || '#e8f0ff',
+        borderRadius: element.style === 'roundcorner-fill' ? '10px' : '999px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+    };
+    const headingMapped = {
       id: makeId('heading'),
       type: 'heading',
       content,
       ...meta,
-      position: { x: snap(x), y: snap(nextY) },
+      position: { x: snap(x + 40), y: snap(nextY) },
       style: {
         ...baseStyle,
-        fontSize: extractFontSize(element.typography, 20),
+        fontSize: getLeafFontSize({ nodeType: 'iconHeading', typography: element.typography, width, tone }),
         fontWeight: extractFontWeight(element.typography, 600),
-        color: element.typography?.color || '#111827',
+        color: getLeafColor(element.typography?.color, tone),
         lineHeight: element.typography?.line_height || '1.35',
-        maxWidth: `${Math.max(180, width - 16)}px`,
+        maxWidth: `${Math.max(160, width - 56)}px`,
       },
     };
-    return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 8 };
+    return {
+      elements: [iconMapped, headingMapped],
+      consumedHeight: Math.max(36, estimateElementHeight(headingMapped)) + marginTop + marginBottom + 8,
+    };
   }
 
   if (node.type === 'spacer') {
@@ -522,8 +638,10 @@ const convertGraphPage = (rawPage) => {
           parentRowId: parentMeta.parentRowId || null,
           parentColumnId: node.type === 'column' ? surfaceId : parentMeta.parentColumnId || null,
           parentBoxId: node.type === 'box' ? surfaceId : parentMeta.parentBoxId || null,
+          sectionTone: parentMeta.sectionTone || 'light',
         });
-        if (mapped.element) acc.push(mapped.element);
+        if (Array.isArray(mapped.elements)) acc.push(...mapped.elements);
+        else if (mapped.element) acc.push(mapped.element);
         cursorY += mapped.consumedHeight || 0;
       });
 
@@ -538,7 +656,8 @@ const convertGraphPage = (rawPage) => {
     }
 
     const mapped = mapLeafNode(node, layout.x, layout.y, layout.width, parentMeta);
-    if (mapped.element) acc.push(mapped.element);
+    if (Array.isArray(mapped.elements)) acc.push(...mapped.elements);
+    else if (mapped.element) acc.push(mapped.element);
     return mapped.consumedHeight || 0;
   };
 
@@ -557,16 +676,27 @@ const convertGraphPage = (rawPage) => {
     const rows = sectionNode.rows || [];
     let cursorY = 32;
     const contentWidth = PAGE_WIDTH - (SECTION_SIDE_PADDING * 2);
+    const sectionStyle = deriveSectionStyle(sectionNode);
+    const sectionTone = inferTone({
+      backgroundColor: sectionStyle.backgroundColor,
+      hasImage: !!sectionStyle.backgroundImage,
+      parentTone: 'light',
+    });
 
     rows.forEach((rowId) => {
-      const consumed = processNode(rowId, { x: SECTION_SIDE_PADDING, y: cursorY, width: contentWidth }, importedElements);
+      const consumed = processNode(
+        rowId,
+        { x: SECTION_SIDE_PADDING, y: cursorY, width: contentWidth },
+        importedElements,
+        { sectionTone }
+      );
       cursorY += consumed + 20;
     });
 
     return {
       id: sectionNode.element?.section_id || sectionNode.elementId || makeId(`section-${sectionIndex + 1}`),
       type: sectionNode.type || 'custom',
-      style: deriveSectionStyle(sectionNode),
+      style: sectionStyle,
       elements: importedElements,
     };
   });
