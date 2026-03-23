@@ -40,8 +40,10 @@ export const estimateElementSize = (element, widthHint = 760) => {
   const style = element?.style || {};
   const type = (element?.type || '').toLowerCase();
   const content = element?.content;
-
-  const width = clamp(parsePx(style.maxWidth, widthHint), 120, widthHint);
+  const maxWidth = clamp(parsePx(style.maxWidth, widthHint), 120, widthHint);
+  const width = String(style.width || '').includes('fit-content')
+    ? maxWidth
+    : clamp(parsePx(style.width, maxWidth), 120, widthHint);
 
   if (type === 'image') {
     const imageWidth = clamp(parsePx(style.maxWidth, parsePx(style.width, widthHint)), 140, widthHint);
@@ -101,10 +103,18 @@ export const estimateElementSize = (element, widthHint = 760) => {
   const fontSize = parsePx(style.fontSize, type === 'heading' ? 34 : 17);
   const lineHeight = parseLineHeight(style.lineHeight, fontSize, type === 'heading' ? 1.15 : 1.6);
   const text = typeof content === 'string' ? content : JSON.stringify(content || '');
-  const charsPerLine = Math.max(14, width / Math.max(7, fontSize * (type === 'heading' ? 0.52 : 0.5)));
+  const intrinsicWidth = Math.max(
+    96,
+    Math.min(
+      maxWidth,
+      Math.ceil((text.length || 1) * fontSize * (type === 'heading' ? 0.42 : 0.34))
+    )
+  );
+  const measuredWidth = String(style.width || '').includes('fit-content') ? intrinsicWidth : width;
+  const charsPerLine = Math.max(14, measuredWidth / Math.max(7, fontSize * (type === 'heading' ? 0.52 : 0.5)));
   const lineCount = clamp(Math.ceil((text.length || 1) / charsPerLine), 1, 20);
   const padding = type === 'heading' ? 20 : 16;
-  return { width, height: Math.max(32, (lineCount * lineHeight) + padding) };
+  return { width: measuredWidth, height: Math.max(32, (lineCount * lineHeight) + padding) };
 };
 
 const withResponsiveStyle = (element, device, innerWidth) => {

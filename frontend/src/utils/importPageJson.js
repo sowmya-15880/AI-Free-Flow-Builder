@@ -304,6 +304,17 @@ const getLeafFontSize = ({ nodeType, typography, width, tone }) => {
   return width >= 440 ? '18px' : '16px';
 };
 
+const getTextLayoutStyle = ({ align = 'left', maxWidth, isHeading = false }) => ({
+  display: 'inline-block',
+  width: 'fit-content',
+  maxWidth: `${Math.max(140, maxWidth)}px`,
+  whiteSpace: 'normal',
+  wordBreak: 'break-word',
+  margin: align === 'center' ? '0 auto' : align === 'right' ? '0 0 0 auto' : '0',
+  textAlign: align,
+  ...(isHeading ? { textWrap: 'balance' } : {}),
+});
+
 const collectSectionNodeStats = (sectionId, elementsById) => {
   const counts = {};
   const visit = (nodeId) => {
@@ -384,9 +395,12 @@ const mapLeafNode = (node, x, y, width, meta = {}) => {
         fontWeight: extractFontWeight(element.typography, 700),
         color: getLeafColor(element.typography?.color, tone),
         lineHeight: element.typography?.line_height || (tone === 'dark' ? '1.08' : '1.16'),
-        maxWidth: `${Math.max(240, width - 16)}px`,
         letterSpacing: '-0.03em',
-        margin: element.align === 'center' ? '0 auto' : '0',
+        ...getTextLayoutStyle({
+          align: element.align || 'left',
+          maxWidth: Math.max(260, width - 16),
+          isHeading: true,
+        }),
       },
     };
     return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 12 };
@@ -406,8 +420,10 @@ const mapLeafNode = (node, x, y, width, meta = {}) => {
         fontWeight: extractFontWeight(element.typography, 400),
         color: getLeafColor(element.typography?.color, tone, '#4b5563', 'rgba(255,255,255,0.82)'),
         lineHeight: element.typography?.line_height || '1.6',
-        maxWidth: `${Math.max(240, width - 16)}px`,
-        margin: element.align === 'center' ? '0 auto' : '0',
+        ...getTextLayoutStyle({
+          align: element.align || 'left',
+          maxWidth: Math.max(240, width - 16),
+        }),
       },
     };
     return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 10 };
@@ -534,7 +550,10 @@ const mapLeafNode = (node, x, y, width, meta = {}) => {
         fontWeight: extractFontWeight(element.typography, 600),
         color: getLeafColor(element.typography?.color, tone),
         lineHeight: element.typography?.line_height || '1.35',
-        maxWidth: `${Math.max(160, width - 56)}px`,
+        ...getTextLayoutStyle({
+          align: element.align || 'left',
+          maxWidth: Math.max(160, width - 56),
+        }),
       },
     };
     return {
