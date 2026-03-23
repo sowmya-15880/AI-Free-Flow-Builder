@@ -364,7 +364,7 @@ function CanvasSection({ section, index, device, isHierarchical, pageElements })
   };
 
   // Render flat structure (original)
-  const layout = !isHierarchical ? useMemo(() => buildSectionLayout(section, device), [section, device]) : null;
+  const layout = useMemo(() => isHierarchical ? null : buildSectionLayout(section, device), [section, device, isHierarchical]);
   const sectionHeight = layout?.minHeight || 400;
   const isResponsiveFlow = device !== 'desktop';
 

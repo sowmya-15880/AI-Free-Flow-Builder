@@ -82,14 +82,6 @@ function BoxElement({ element }) {
   return <div className="layout-surface-inner" style={element.style} />;
 }
 
-function RowElement({ element }) {
-  return <div className="layout-surface-inner layout-row-inner" style={element.style} />;
-}
-
-function ColumnElement({ element }) {
-  return <div className="layout-surface-inner layout-column-inner" style={element.style} />;
-}
-
 function ButtonElement({ element, editable, onContentChange }) {
   return (
     <div style={{ textAlign: element.style?.textAlign || 'left' }}>
