@@ -5,6 +5,14 @@ import ElementRenderer from '@/components/builder/ElementRenderer';
 import { Plus, Trash2, GripVertical, Copy, ArrowUp, ArrowDown } from 'lucide-react';
 import { buildSectionLayout, getElementPosition } from '@/utils/responsiveLayout';
 
+// Hierarchy detection and helper utilities
+const isHierarchicalPage = (page) => !!page?.elements && Object.keys(page.elements || {}).length > 0;
+
+const getHierarchicalElement = (page, elementId) => {
+  if (!isHierarchicalPage(page)) return null;
+  return page.elements[elementId] || null;
+};
+
 const SNAP_GRID = 8;
 
 const clamp = (value, min, max) => Math.max(min, Math.min(value, max));
@@ -280,11 +288,21 @@ function FreeFlowElement({ element, index, sectionId, sectionRef, onGuideChange,
   );
 }
 
-function CanvasSection({ section, index, device }) {
+function CanvasSection({ section, index, device, isHierarchical, pageElements }) {
   const { state, dispatch } = useBuilder();
   const isSelected = state.selectedSectionId === section.id && !state.selectedElementId;
   const hasSelectedElement = !!state.selectedElementId;
-  const selectedElementInSection = section.elements.some((element) => element.id === state.selectedElementId);
+  const selectedElementInSection = isHierarchical
+    ? (section.rows || []).some(rowId => {
+        const row = pageElements[rowId];
+        if (!row) return false;
+        return (row.columns || []).some(colId => {
+          const col = pageElements[colId];
+          return col && (col.elements || []).includes(state.selectedElementId);
+        });
+      })
+    : section.elements.some((element) => element.id === state.selectedElementId);
+  
   const sectionContentRef = useRef(null);
   const [guide, setGuide] = useState({ visible: false, x: 0, y: 0 });
 
@@ -299,11 +317,64 @@ function CanvasSection({ section, index, device }) {
     }
   };
 
-  const layout = useMemo(() => buildSectionLayout(section, device), [section, device]);
-  const sectionHeight = layout.minHeight;
+  // Render hierarchical structure (rows → columns → elements)
+  const renderHierarchicalContent = () => {
+    const rows = (section.rows || []).map(rowId => pageElements[rowId]).filter(Boolean);
+    if (rows.length === 0) {
+      return (
+        <div className="empty-section" data-testid={`empty-section-${section.id}`}>
+          <Plus size={18} style={{ color: '#b0b0b8' }} />
+          <span>No rows in this section</span>
+        </div>
+      );
+    }
+
+    return rows.map((row) => (
+      <div key={row.id} className="hierarchical-row" data-element-id={row.id}>
+        <div className="row-header">Row: {row.name || 'Untitled'}</div>
+        <div className="row-columns">
+          {(row.columns || []).map((colId) => {
+            const column = pageElements[colId];
+            if (!column) return null;
+            return (
+              <div key={column.id} className="hierarchical-column" data-element-id={column.id}>
+                <div className="column-header">Column: {column.name || 'Untitled'}</div>
+                <div className="column-elements">
+                  {(column.elements || []).map((elemId) => {
+                    const element = pageElements[elemId];
+                    if (!element) return null;
+                    const elementData = element.element || element;
+                    return (
+                      <HierarchicalElement
+                        key={element.id}
+                        element={element}
+                        elementData={elementData}
+                        sectionId={section.id}
+                        columnId={column.id}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    ));
+  };
+
+  // Render flat structure (original)
+  const layout = !isHierarchical ? useMemo(() => buildSectionLayout(section, device), [section, device]) : null;
+  const sectionHeight = layout?.minHeight || 400;
   const isResponsiveFlow = device !== 'desktop';
+
   const cloneCurrentSection = (event) => {
     event.stopPropagation();
+    if (isHierarchical) {
+      // For hierarchical, clone structure is more complex
+      // TODO: Implement hierarchical section cloning
+      return;
+    }
     const clonedElements = section.elements.map((element) => ({
       ...JSON.parse(JSON.stringify(element)),
       id: createId(),
@@ -345,40 +416,44 @@ function CanvasSection({ section, index, device }) {
 
         <div
           ref={sectionContentRef}
-          className={`canvas-section-content ${hasSelectedElement ? 'has-active-element' : ''}`}
+          className={`canvas-section-content ${hasSelectedElement ? 'has-active-element' : ''} ${isHierarchical ? 'hierarchical-content' : ''}`}
           data-section-id={section.id}
           style={{ minHeight: `${sectionHeight}px` }}
         >
-          {guide.visible && (
+          {isHierarchical ? renderHierarchicalContent() : (
             <>
-              <div className="snap-guide-v" style={{ left: `${guide.x}px` }} />
-              <div className="snap-guide-h" style={{ top: `${guide.y}px` }} />
+              {guide.visible && (
+                <>
+                  <div className="snap-guide-v" style={{ left: `${guide.x}px` }} />
+                  <div className="snap-guide-h" style={{ top: `${guide.y}px` }} />
+                </>
+              )}
+
+              {layout.orderedElements.map((rawElement, elementIndex) => {
+                const element = layout.elementById[rawElement.id] || rawElement;
+                const renderPosition = layout.positionById[rawElement.id] || getElementPosition(element, elementIndex);
+                return (
+                  <FreeFlowElement
+                    key={rawElement.id}
+                    element={element}
+                    index={elementIndex}
+                    sectionId={section.id}
+                    sectionRef={sectionContentRef}
+                    onGuideChange={setGuide}
+                    isIsolatedTarget={selectedElementInSection && state.selectedElementId === rawElement.id}
+                    renderPosition={renderPosition}
+                    isResponsiveFlow={isResponsiveFlow}
+                  />
+                );
+              })}
+
+              {section.elements.length === 0 && (
+                <div className="empty-section" data-testid={`empty-section-${section.id}`}>
+                  <Plus size={18} style={{ color: '#b0b0b8' }} />
+                  <span>Drag elements here or click from sidebar</span>
+                </div>
+              )}
             </>
-          )}
-
-          {layout.orderedElements.map((rawElement, elementIndex) => {
-            const element = layout.elementById[rawElement.id] || rawElement;
-            const renderPosition = layout.positionById[rawElement.id] || getElementPosition(element, elementIndex);
-            return (
-            <FreeFlowElement
-              key={rawElement.id}
-              element={element}
-              index={elementIndex}
-              sectionId={section.id}
-              sectionRef={sectionContentRef}
-              onGuideChange={setGuide}
-              isIsolatedTarget={selectedElementInSection && state.selectedElementId === rawElement.id}
-              renderPosition={renderPosition}
-              isResponsiveFlow={isResponsiveFlow}
-            />
-            );
-          })}
-
-          {section.elements.length === 0 && (
-            <div className="empty-section" data-testid={`empty-section-${section.id}`}>
-              <Plus size={18} style={{ color: '#b0b0b8' }} />
-              <span>Drag elements here or click from sidebar</span>
-            </div>
           )}
         </div>
       </div>
@@ -405,8 +480,68 @@ function CanvasSection({ section, index, device }) {
   );
 }
 
-export default function Canvas({ device, onCanvasInteract }) {
+// Hierarchical element component
+function HierarchicalElement({ element, elementData, sectionId, columnId }) {
   const { state, dispatch } = useBuilder();
+  const wrapperRef = useRef(null);
+  const isSelected = state.selectedElementId === element.id;
+
+  const handleSelect = (e) => {
+    e.stopPropagation();
+    dispatch({ type: 'SELECT_ELEMENT', elementId: element.id, sectionId });
+  };
+
+  const handleDelete = (e) => {
+    e.stopPropagation();
+    dispatch({ type: 'DELETE_ELEMENT_HIERARCHY', elementId: element.id });
+  };
+
+  const handleDuplicate = (e) => {
+    e.stopPropagation();
+    const newElement = {
+      ...JSON.parse(JSON.stringify(element)),
+      id: Math.random().toString(36).substring(2, 11),
+      parent_id: element.parent_id
+    };
+    dispatch({ type: 'ADD_ELEMENT_TO_HIERARCHY', parentId: element.parent_id, element: newElement });
+  };
+
+  const handleInlineContentChange = (nextContent) => {
+    dispatch({
+      type: 'UPDATE_ELEMENT_HIERARCHY',
+      elementId: element.id,
+      updates: { content: nextContent, element: { ...elementData, content: nextContent } }
+    });
+  };
+
+  return (
+    <div
+      ref={wrapperRef}
+      className={`hierarchical-element ${isSelected ? 'is-selected' : ''}`}
+      onClick={handleSelect}
+      data-testid={`hierarchical-element-${element.id}`}
+    >
+      <div className="element-drag-handle" title="Select">
+        <GripVertical size={11} />
+      </div>
+
+      <div className="element-actions">
+        <button className="element-action-btn" onClick={handleDuplicate} title="Duplicate" data-testid={`duplicate-element-${element.id}`}>
+          <Copy size={11} />
+        </button>
+        <button className="element-action-btn danger" onClick={handleDelete} title="Delete" data-testid={`delete-element-${element.id}`}>
+          <Trash2 size={11} />
+        </button>
+      </div>
+
+      <ElementRenderer element={elementData} editable={isSelected} onContentChange={handleInlineContentChange} />
+    </div>
+  );
+}
+
+export default function Canvas({ device, onCanvasInteract }) {
+  const { state, dispatch, deviceView } = useBuilder();
+  const isHierarchical = isHierarchicalPage(state.page);
 
   const { setNodeRef } = useDroppable({
     id: 'canvas-root',
@@ -431,7 +566,14 @@ export default function Canvas({ device, onCanvasInteract }) {
       <div ref={setNodeRef} className={`canvas-paper ${deviceClass}`} data-testid="canvas-paper">
         {state.page.sections.length > 0 ? (
           state.page.sections.map((section, index) => (
-            <CanvasSection key={section.id} section={section} index={index} device={device} />
+            <CanvasSection
+              key={section.id}
+              section={section}
+              index={index}
+              device={device}
+              isHierarchical={isHierarchical}
+              pageElements={state.page.elements || {}}
+            />
           ))
         ) : (
           <div className="canvas-empty" data-testid="canvas-empty">

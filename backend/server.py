@@ -957,6 +957,146 @@ Choose the category closest to the user's prompt topic. Use DIFFERENT images for
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@api_router.post("/import-page")
+async def import_page(page_json: Dict[str, Any]):
+    """
+    Import a page from Zoho-style JSON format.
+    Transforms hierarchical structure (sections→rows→columns→elements) to FFB format.
+    Preserves all device-specific styling and element properties.
+    """
+    try:
+        # Validate that it's a valid page structure
+        if "type" not in page_json:
+            raise HTTPException(status_code=400, detail="Missing 'type' field in page JSON")
+        
+        page_type = page_json.get("type")
+        
+        if page_type == "page":
+            # Zoho-style hierarchical format
+            return transform_zoho_to_ffb(page_json)
+        elif page_type == "section" or "sections" in page_json:
+            # Already FFB format or partially FFB
+            return {"page": page_json, "format": "ffb", "transformation": "none"}
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown page type: {page_type}")
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error importing page: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def transform_zoho_to_ffb(zoho_page: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Transform Zoho-style hierarchical JSON to FFB format.
+    Keeps the hierarchical elements in the page.elements map for advanced features.
+    """
+    result = {
+        "page": {
+            "title": zoho_page.get("title", "Imported Page"),
+            "page_type": zoho_page.get("page_type", "custom"),
+            "type": "page",
+            "sections": [],  # Traditional flat structure for basic compatibility
+            "elements": zoho_page.get("elements", {}),  # Keep full hierarchy
+        },
+        "format": "zoho_extended",
+        "transformation": "hierarchical_preserved",
+        "stats": {
+            "total_elements": len(zoho_page.get("elements", {})),
+            "root_sections": len(zoho_page.get("sections", [])),
+        }
+    }
+    
+    # If there are sections in traditional format, add them too
+    if "sections" in zoho_page:
+        result["page"]["sections"] = zoho_page["sections"]
+    
+    return result
+
+
+@api_router.post("/import-page-flat")
+async def import_page_flat(page_json: Dict[str, Any]):
+    """
+    Import a Zoho-style page and flatten hierarchical structure to simple sections.
+    Use this if you want simple flat structure without hierarchy support.
+    """
+    try:
+        elements_map = page_json.get("elements", {})
+        section_refs = page_json.get("sections", [])
+        
+        flat_sections = []
+        
+        # For each section reference
+        for section_id in section_refs:
+            if section_id not in elements_map:
+                continue
+            
+            section_elem = elements_map[section_id]
+            flat_section = {
+                "id": section_id,
+                "type": section_elem.get("type", "section"),
+                "style": extract_style(section_elem),
+                "elements": flatten_elements_recursively(section_elem.get("rows", []), elements_map)
+            }
+            flat_sections.append(flat_section)
+        
+        return {
+            "page": {
+                "title": page_json.get("title", "Imported Page"),
+                "sections": flat_sections,
+            },
+            "format": "ffb_flat",
+            "transformation": "flattened",
+            "stats": {
+                "total_elements": len(elements_map),
+                "sections": len(flat_sections),
+                "warning": "Hierarchical information lost in flattening. Use import-page for full support."
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error flattening page: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def extract_style(element: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract combined style from element, accounting for Zoho format wrapping"""
+    elem_props = element.get("element", {})
+    
+    if isinstance(elem_props, dict):
+        # Return Zoho-style element properties as-is (contains all styling)
+        return elem_props
+    
+    return element.get("style", {})
+
+
+def flatten_elements_recursively(row_ids: List[str], elements_map: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Recursively flatten row→column→element hierarchy into a flat list"""
+    result = []
+    
+    for row_id in row_ids:
+        if row_id not in elements_map:
+            continue
+        
+        row = elements_map[row_id]
+        column_ids = row.get("columns", [])
+        
+        for col_id in column_ids:
+            if col_id not in elements_map:
+                continue
+            
+            col = elements_map[col_id]
+            element_ids = col.get("elements", [])
+            
+            for el_id in element_ids:
+                if el_id not in elements_map:
+                    continue
+                
+                result.append(elements_map[el_id])
+    
+    return result
+
+
 @api_router.get("/")
 async def root():
     return {"message": "FlowState Builder API"}
