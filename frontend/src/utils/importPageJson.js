@@ -182,10 +182,11 @@ const createSurfaceElement = ({
     hasImage: !!background.image?.image_url,
     parentTone: meta.sectionTone || 'light',
   });
+  const archetype = meta.sectionArchetype || 'content';
   const fallbackBackground = kind === 'box'
     ? (surfaceTone === 'dark' ? 'rgba(255,255,255,0.14)' : '#ffffff')
     : kind === 'row'
-      ? 'transparent'
+      ? (archetype === 'info-strip' || archetype === 'card-grid' || archetype === 'cta' ? '#ffffff' : 'transparent')
       : 'transparent';
   const style = {
     width: `${Math.max(80, width)}px`,
@@ -210,6 +211,25 @@ const createSurfaceElement = ({
   }
   if (kind === 'column') {
     style.backgroundColor = explicitBackgroundColor || 'transparent';
+  }
+  if (kind === 'row' && !explicitBackgroundColor) {
+    if (archetype === 'info-strip') {
+      style.borderRadius = getRadius(element, 20);
+      style.boxShadow = '0 18px 44px rgba(15,23,42,0.08)';
+    }
+    if (archetype === 'card-grid') {
+      style.backgroundColor = '#f6f8ff';
+      style.borderRadius = getRadius(element, 22);
+      style.boxShadow = '0 20px 48px rgba(15,23,42,0.06)';
+    }
+    if (archetype === 'cta') {
+      style.backgroundColor = '#ffffff';
+      style.borderRadius = getRadius(element, 22);
+      style.boxShadow = '0 16px 40px rgba(15,23,42,0.08)';
+    }
+  }
+  if (kind === 'column' && archetype === 'card-grid' && !explicitBackgroundColor) {
+    style.backgroundColor = 'transparent';
   }
   return {
     id: id || makeId(kind),
@@ -284,6 +304,35 @@ const getLeafFontSize = ({ nodeType, typography, width, tone }) => {
   return width >= 440 ? '18px' : '16px';
 };
 
+const collectSectionNodeStats = (sectionId, elementsById) => {
+  const counts = {};
+  const visit = (nodeId) => {
+    const node = elementsById[nodeId];
+    if (!node) return;
+    const type = node.type;
+    counts[type] = (counts[type] || 0) + 1;
+    if (type === 'section') {
+      (node.rows || []).forEach(visit);
+    } else if (type === 'row') {
+      (node.columns || []).forEach(visit);
+    } else if (type === 'column' || type === 'box') {
+      (node.elements || []).forEach(visit);
+    }
+  };
+  visit(sectionId);
+  return counts;
+};
+
+const inferSectionArchetype = (sectionNode, elementsById) => {
+  const counts = collectSectionNodeStats(sectionNode.elementId, elementsById);
+  if ((counts.lpform || 0) >= 1 && (counts.image || 0) >= 1 && (counts.heading || 0) >= 1) return 'hero';
+  if ((counts.iconHeading || 0) >= 2) return 'info-strip';
+  if ((counts.box || 0) >= 4 && (counts.heading || 0) >= 4) return 'card-grid';
+  if ((counts.image || 0) >= 2 && (counts.heading || 0) >= 4) return 'people-grid';
+  if ((counts.button || 0) >= 1 && (counts.heading || 0) <= 2) return 'cta';
+  return 'content';
+};
+
 const deriveSectionStyle = (sectionNode) => {
   const element = sectionNode?.element || {};
   const background = element.background || {};
@@ -300,6 +349,14 @@ const deriveSectionStyle = (sectionNode) => {
     style.backgroundBlendMode = 'multiply';
   }
   return style;
+};
+
+const getLayoutWidth = (archetype, layoutWidth) => {
+  if (archetype === 'hero') return Math.min(layoutWidth, 980);
+  if (archetype === 'info-strip') return Math.min(layoutWidth, 900);
+  if (archetype === 'card-grid') return Math.min(layoutWidth, 940);
+  if (archetype === 'cta') return Math.min(layoutWidth, 860);
+  return layoutWidth;
 };
 
 const mapLeafNode = (node, x, y, width, meta = {}) => {
@@ -519,16 +576,20 @@ const convertGraphPage = (rawPage) => {
       const paddingRight = getSpacingValue(rowSpacing.padding, 'right');
       const paddingTop = getSpacingValue(rowSpacing.padding, 'top');
       const paddingBottom = getSpacingValue(rowSpacing.padding, 'bottom');
-      const innerX = layout.x + paddingLeft;
-      const innerWidth = Math.max(260, layout.width - paddingLeft - paddingRight);
+      const archetype = parentMeta.sectionArchetype || 'content';
+      const effectiveWidth = getLayoutWidth(archetype, layout.width);
+      const centeredX = layout.x + Math.max(0, Math.round((layout.width - effectiveWidth) / 2));
+      const rowBaseX = archetype === 'content' ? layout.x : centeredX;
+      const innerX = rowBaseX + paddingLeft;
+      const innerWidth = Math.max(260, effectiveWidth - paddingLeft - paddingRight);
       const ratios = parseRatioList(node.element?.column_ratio, columns.length);
       const ratioSum = ratios.reduce((sum, value) => sum + value, 0) || columns.length || 1;
       const rowId = node.elementId || makeId('row');
       const rowElement = createSurfaceElement({
         id: rowId,
-        x: layout.x,
+        x: rowBaseX,
         y: layout.y + marginTop,
-        width: layout.width,
+        width: effectiveWidth,
         height: 48,
         element: nodeElement,
         kind: 'row',
@@ -566,7 +627,7 @@ const convertGraphPage = (rawPage) => {
       rowElement.content = { ...rowElement.content, columnIds };
       rowElement.style = {
         ...rowElement.style,
-        width: `${Math.max(120, layout.width)}px`,
+        width: `${Math.max(120, effectiveWidth)}px`,
         height: `${Math.max(48, totalRowHeight)}px`,
       };
 
@@ -682,13 +743,14 @@ const convertGraphPage = (rawPage) => {
       hasImage: !!sectionStyle.backgroundImage,
       parentTone: 'light',
     });
+    const sectionArchetype = inferSectionArchetype(sectionNode, elementsById);
 
     rows.forEach((rowId) => {
       const consumed = processNode(
         rowId,
         { x: SECTION_SIDE_PADDING, y: cursorY, width: contentWidth },
         importedElements,
-        { sectionTone }
+        { sectionTone, sectionArchetype }
       );
       cursorY += consumed + 20;
     });
