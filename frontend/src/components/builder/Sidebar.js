@@ -83,6 +83,11 @@ const PANEL_CONTENT = {
   elements: {
     title: 'Elements',
     categories: [
+      { id: 'containers', label: 'Containers', items: [
+        { type: 'row', label: 'Row', icon: Columns },
+        { type: 'column', label: 'Column', icon: Layout },
+        { type: 'box', label: 'Box', icon: MessageSquare },
+      ]},
       { id: 'text', label: 'Text', items: [
         { type: 'heading', label: 'Heading', icon: Type },
         { type: 'paragraph', label: 'Paragraph', icon: AlignLeft },

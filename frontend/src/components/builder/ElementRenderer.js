@@ -295,9 +295,29 @@ function SpacerElement({ element }) {
   return <div style={element.style} />;
 }
 
+function RowElement({ element, children }) {
+  // Row container - typically horizontal layout with columns
+  return (
+    <div style={{ ...element.style, display: 'flex', flexDirection: 'row', ...element.style }}>
+      {children || <p style={{ color: '#999', fontSize: 12 }}>Row: Add columns</p>}
+    </div>
+  );
+}
+
+function ColumnElement({ element, children }) {
+  // Column container - typically vertical layout within a row
+  return (
+    <div style={{ ...element.style, display: 'flex', flexDirection: 'column', flex: 1, ...element.style }}>
+      {children || <p style={{ color: '#999', fontSize: 12 }}>Column: Add elements</p>}
+    </div>
+  );
+}
+
 const ElementRenderer = memo(function ElementRenderer({ element, editable = false, onContentChange = null }) {
   switch (element.type) {
     case 'box': return <BoxElement element={element} />;
+    case 'row': return <RowElement element={element} />;
+    case 'column': return <ColumnElement element={element} />;
     case 'heading': return <HeadingElement element={element} editable={editable} onContentChange={onContentChange} />;
     case 'paragraph': return <ParagraphElement element={element} editable={editable} onContentChange={onContentChange} />;
     case 'image': return <ImageElement element={element} />;

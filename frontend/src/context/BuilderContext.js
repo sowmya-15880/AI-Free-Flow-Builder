@@ -17,6 +17,50 @@ const getDefaultPosition = (index = 0) => ({
   x: DEFAULT_LEFT,
   y: DEFAULT_TOP_BASE + (index * DEFAULT_TOP_GAP),
 });
+
+// Helper: Check if page uses hierarchical (Zoho) format
+const isHierarchicalPage = (page) => !!page?.elements && Object.keys(page.elements || {}).length > 0;
+
+// Helper: Get element from hierarchy or flat structure
+const getElementById = (page, elementId) => {
+  if (isHierarchicalPage(page) && page.elements[elementId]) {
+    return page.elements[elementId];
+  }
+  // Search in flat structure
+  for (const section of page.sections || []) {
+    const el = section.elements?.find(e => e.id === elementId);
+    if (el) return el;
+  }
+  return null;
+};
+
+// Helper: Get all children of an element (for hierarchical rendering)
+const getElementChildren = (page, elementId) => {
+  if (!isHierarchicalPage(page)) return [];
+  const element = page.elements[elementId];
+  if (!element) return [];
+  
+  const childIds = [
+    ...(element.children || []),
+    ...(element.columns || []),
+    ...(element.elements || [])
+  ];
+  
+  return childIds.map(id => page.elements[id]).filter(Boolean);
+};
+
+// Helper: Get device-specific style for an element
+const getDeviceStyle = (element, device = 'desktop') => {
+  const baseStyle = element?.style || {};
+  if (device === 'mobile' && element?.mobile_style) {
+    return { ...baseStyle, ...element.mobile_style };
+  }
+  if (device === 'tablet' && element?.tablet_style) {
+    return { ...baseStyle, ...element.tablet_style };
+  }
+  return baseStyle;
+};
+
 const ensureElementPosition = (element, index = 0) => {
   if (element?.position && typeof element.position.x === 'number' && typeof element.position.y === 'number') {
     return {
@@ -101,16 +145,7 @@ const resolveElementCollisions = (elements = [], prioritizedElementId = null) =>
   return resolved;
 };
 
-const resolveSectionLayout = (section, prioritizedElementId = null) => ({
-  ...section,
-  elements: resolveElementCollisions(section.elements || [], prioritizedElementId),
-});
-
-const ensurePagePositions = (page) => ({
-  ...page,
-  sections: (page.sections || []).map((section) => resolveSectionLayout(section)),
-});
-
+// Helper: Create default element with all necessary properties
 export const createDefaultElement = (type) => {
   const id = generateId();
   const defaults = {
@@ -176,6 +211,17 @@ export const createDefaultElement = (type) => {
   return defaults[type] || defaults.paragraph;
 };
 
+// Flat structure conversion helpers
+const resolveSectionLayout = (section, prioritizedElementId = null) => ({
+  ...section,
+  elements: resolveElementCollisions(section.elements || [], prioritizedElementId),
+});
+
+const ensurePagePositions = (page) => ({
+  ...page,
+  sections: (page.sections || []).map((section) => resolveSectionLayout(section)),
+});
+
 const MAX_HISTORY = 50;
 
 const pushHistory = (state, newPage) => {
@@ -188,17 +234,136 @@ const builderReducer = (state, action) => {
 
   switch (action.type) {
     case 'SET_PAGE': {
-      newPage = ensurePagePositions(action.payload);
+      const page = action.payload || { title: '', sections: [], elements: {} };
+      // Keep hierarchical structure if present, otherwise use flat structure
+      newPage = {
+        title: page.title || '',
+        sections: page.sections || [],
+        elements: page.elements || {},
+      };
       return {
-        ...state, page: newPage,
+        ...state,
+        page: newPage,
         history: [JSON.parse(JSON.stringify(newPage))],
         historyIndex: 0,
-        selectedElementId: null, selectedSectionId: null
+        selectedElementId: null,
+        selectedSectionId: null,
+        deviceView: 'desktop',
+      };
+    }
+
+    case 'SET_DEVICE_VIEW': {
+      // Change device view (desktop, tablet, mobile)
+      return {
+        ...state,
+        deviceView: action.device || 'desktop'
+      };
+    }
+
+    case 'ADD_ELEMENT_TO_HIERARCHY': {
+      // Add element to parent in hierarchical structure
+      const { parentId, element: newElement } = action;
+      const element = newElement || createDefaultElement(action.elementType);
+      element.id = element.id || generateId();
+      element.parent_id = parentId;
+
+      newPage = {
+        ...state.page,
+        elements: {
+          ...state.page.elements,
+          [element.id]: element
+        }
+      };
+
+      // Add to parent's children list
+      if (parentId && newPage.elements[parentId]) {
+        const parent = newPage.elements[parentId];
+        const elemType = parent.element_type;
+        if (elemType === 'row' && element.element_type === 'column') {
+          parent.columns = [...(parent.columns || []), element.id];
+        } else if (elemType === 'column') {
+          parent.elements = [...(parent.elements || []), element.id];
+        } else if (elemType === 'box') {
+          parent.children = [...(parent.children || []), element.id];
+        }
+      }
+
+      return {
+        ...state,
+        page: newPage,
+        ...pushHistory(state, newPage),
+        selectedElementId: element.id
+      };
+    }
+
+    case 'UPDATE_ELEMENT_HIERARCHY': {
+      // Update element in hierarchical structure
+      const { elementId, updates } = action;
+      const element = state.page.elements[elementId];
+      if (!element) return state;
+
+      const updated = { ...element, ...updates };
+      if (updates.style) {
+        updated.style = { ...element.style, ...updates.style };
+      }
+
+      newPage = {
+        ...state.page,
+        elements: {
+          ...state.page.elements,
+          [elementId]: updated
+        }
+      };
+
+      return {
+        ...state,
+        page: newPage,
+        ...pushHistory(state, newPage)
+      };
+    }
+
+    case 'DELETE_ELEMENT_HIERARCHY': {
+      // Delete element and all children from hierarchical structure
+      const { elementId } = action;
+      const toDelete = [elementId];
+      const newElements = { ...state.page.elements };
+
+      // Collect all descendants
+      const collectDescendants = (id) => {
+        const el = newElements[id];
+        if (!el) return;
+        [...(el.children || []), ...(el.columns || []), ...(el.elements || [])].forEach(childId => {
+          toDelete.push(childId);
+          collectDescendants(childId);
+        });
+      };
+      collectDescendants(elementId);
+
+      // Remove from parent
+      const element = newElements[elementId];
+      if (element?.parent_id) {
+        const parent = newElements[element.parent_id];
+        if (parent) {
+          parent.children = (parent.children || []).filter(id => id !== elementId);
+          parent.columns = (parent.columns || []).filter(id => id !== elementId);
+          parent.elements = (parent.elements || []).filter(id => id !== elementId);
+        }
+      }
+
+      // Delete all
+      toDelete.forEach(id => delete newElements[id]);
+
+      newPage = { ...state.page, elements: newElements };
+      return {
+        ...state,
+        page: newPage,
+        ...pushHistory(state, newPage),
+        selectedElementId: null
       };
     }
 
     case 'SET_PAGE_FROM_RUST': {
-      newPage = ensurePagePositions(action.payload);
+      newPage = action.payload;
       return {
         ...state,
         page: newPage,
@@ -372,9 +537,10 @@ const builderReducer = (state, action) => {
 };
 
 const initialState = {
-  page: { title: '', sections: [] },
+  page: { title: '', sections: [], elements: {} },
   selectedElementId: null,
   selectedSectionId: null,
+  deviceView: 'desktop',
   history: [],
   historyIndex: -1
 };
@@ -429,22 +595,39 @@ export const BuilderProvider = ({ children }) => {
 
   const getSelectedElement = useCallback(() => {
     if (!state.selectedElementId) return null;
+    
+    // Check hierarchical structure first
+    if (isHierarchicalPage(state.page)) {
+      return getElementById(state.page, state.selectedElementId);
+    }
+    
+    // Fall back to flat structure
     for (const section of state.page.sections) {
       const el = section.elements.find(e => e.id === state.selectedElementId);
       if (el) return el;
     }
     return null;
-  }, [state.selectedElementId, state.page.sections]);
+  }, [state.selectedElementId, state.page]);
 
   const getSelectedSection = useCallback(() => {
     if (!state.selectedSectionId) return null;
     return state.page.sections.find(s => s.id === state.selectedSectionId) || null;
   }, [state.selectedSectionId, state.page.sections]);
 
+  const getElementStyleForDevice = useCallback((element) => {
+    return getDeviceStyle(element, state.deviceView);
+  }, [state.deviceView]);
+
+  const getSelectedElementChildren = useCallback((elementId) => {
+    if (!isHierarchicalPage(state.page)) return [];
+    return getElementChildren(state.page, elementId);
+  }, [state.page]);
+
   return (
     <BuilderContext.Provider value={{
       state, dispatch: dispatchWithEngine, undo, redo, canUndo, canRedo,
-      getSelectedElement, getSelectedSection
+      getSelectedElement, getSelectedSection, getElementStyleForDevice, getSelectedElementChildren,
+      deviceView: state.deviceView
     }}>
       {children}
     </BuilderContext.Provider>
