@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { useBuilder } from '@/context/BuilderContext';
 import ElementRenderer from '@/components/builder/ElementRenderer';
@@ -81,12 +81,41 @@ const getNearestColumnElement = (x, y, sectionId) => {
 function FreeFlowElement({ element, index, sectionId, sectionRef, onGuideChange, isIsolatedTarget, renderPosition, isResponsiveFlow }) {
   const { state, dispatch } = useBuilder();
   const wrapperRef = useRef(null);
+  const contentRef = useRef(null);
   const dragStateRef = useRef(null);
   const [dragPosition, setDragPosition] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [measuredSize, setMeasuredSize] = useState(null);
   const isSelected = state.selectedElementId === element.id;
 
   const currentPosition = dragPosition || renderPosition || getElementPosition(element, index);
+  const isSurfaceElement = !!element.surface;
+
+  useLayoutEffect(() => {
+    if (isSurfaceElement || !contentRef.current) {
+      setMeasuredSize(null);
+      return undefined;
+    }
+
+    const node = contentRef.current;
+    const measure = () => {
+      const rect = node.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      setMeasuredSize({
+        width: snap(Math.ceil(rect.width)),
+        height: snap(Math.ceil(rect.height)),
+      });
+    };
+
+    measure();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    observer?.observe(node);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [element, isSurfaceElement]);
 
   const projectPositionInSection = (sectionEl, clientX, clientY) => {
     if (!sectionEl) return null;
@@ -260,7 +289,12 @@ function FreeFlowElement({ element, index, sectionId, sectionRef, onGuideChange,
   return (
     <div
       ref={wrapperRef}
-      style={{ left: `${currentPosition.x}px`, top: `${currentPosition.y}px` }}
+      style={{
+        left: `${currentPosition.x}px`,
+        top: `${currentPosition.y}px`,
+        width: measuredSize && !isSurfaceElement ? `${measuredSize.width}px` : undefined,
+        minHeight: measuredSize && !isSurfaceElement ? `${measuredSize.height}px` : undefined,
+      }}
       className={`canvas-element-wrapper free-flow ${element.surface ? 'is-surface-element' : 'is-leaf-element'} element-type-${element.type} ${isSelected ? 'is-selected' : ''} ${isIsolatedTarget ? 'is-isolated-target' : ''} ${isDragging ? 'is-dragging-free' : ''} ${isResponsiveFlow ? 'responsive-locked' : ''}`}
       onClick={handleSelect}
       onPointerDown={handleImagePointerDown}
@@ -270,6 +304,12 @@ function FreeFlowElement({ element, index, sectionId, sectionRef, onGuideChange,
       data-parent-row-id={element.parentRowId || ''}
       data-parent-column-id={element.parentColumnId || ''}
     >
+      {isSurfaceElement && (
+        <button className="surface-select-chip" onClick={handleSelect} type="button" title={`Select ${element.type}`}>
+          {element.type}
+        </button>
+      )}
+
       <div className="element-drag-handle" onPointerDown={handleDragStart} title="Drag to move">
         <GripVertical size={11} />
       </div>
@@ -283,7 +323,9 @@ function FreeFlowElement({ element, index, sectionId, sectionRef, onGuideChange,
         </button>
       </div>
 
-      <ElementRenderer element={element} editable={isSelected} onContentChange={handleInlineContentChange} />
+      <div ref={contentRef} className={`canvas-element-content ${isSurfaceElement ? 'is-surface-content' : 'is-leaf-content'}`}>
+        <ElementRenderer element={element} editable={isSelected} onContentChange={handleInlineContentChange} />
+      </div>
     </div>
   );
 }
@@ -317,7 +359,7 @@ function CanvasSection({ section, index, device, isHierarchical, pageElements })
     }
   };
 
-  // Render hierarchical structure (rows → columns → elements)
+  // Render hierarchical structure (rows → columns → elements) with proper containers
   const renderHierarchicalContent = () => {
     const rows = (section.rows || []).map(rowId => pageElements[rowId]).filter(Boolean);
     if (rows.length === 0) {
@@ -329,18 +371,140 @@ function CanvasSection({ section, index, device, isHierarchical, pageElements })
       );
     }
 
-    return rows.map((row) => (
-      <div key={row.id} className="hierarchical-row" data-element-id={row.id}>
-        <div className="row-header">Row: {row.name || 'Untitled'}</div>
-        <div className="row-columns">
-          {(row.columns || []).map((colId) => {
+    return rows.map((row, rowIdx) => {
+      const rowStyle = {
+        ...row.style,
+        display: 'flex',
+        flexDirection: 'row',
+        gap: '16px',
+        padding: '16px',
+        marginBottom: '16px',
+        width: '100%',
+        minHeight: '100px',
+        border: state.selectedElementId === row.id ? '2px solid #6366f1' : '1px solid #e5e7eb',
+        borderRadius: '6px',
+        backgroundColor: state.selectedElementId === row.id ? '#f0f4ff' : '#fafafa',
+        cursor: 'pointer',
+        position: 'relative',
+        zIndex: state.selectedElementId === row.id ? 10 : 1,
+      };
+
+      return (
+        <div
+          key={row.id}
+          className="hierarchical-row"
+          data-element-id={row.id}
+          data-element-type="row"
+          style={rowStyle}
+          onClick={(e) => {
+            e.stopPropagation();
+            dispatch({ type: 'SELECT_ELEMENT', elementId: row.id, sectionId });
+          }}
+          data-testid={`hierarchical-row-${row.id}`}
+        >
+          {/* Row label */}
+          <div
+            style={{
+              position: 'absolute',
+              top: '-20px',
+              left: '0',
+              fontSize: '11px',
+              fontWeight: '600',
+              color: '#8e8e96',
+              textTransform: 'uppercase',
+              backgroundColor: '#ffffff',
+              padding: '2px 6px',
+              borderRadius: '3px',
+            }}
+          >
+            Row
+          </div>
+
+          {/* Row actions */}
+          <div
+            style={{
+              position: 'absolute',
+              top: '4px',
+              right: '4px',
+              display: 'flex',
+              gap: '2px',
+            }}
+          >
+            <button
+              className="element-action-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                dispatch({ type: 'DELETE_ELEMENT_HIERARCHY', elementId: row.id });
+              }}
+              title="Delete row"
+              type="button"
+              style={{ padding: '4px' }}
+            >
+              <Trash2 size={11} />
+            </button>
+          </div>
+
+          {/* Columns inside row */}
+          {(row.columns || []).map((colId, colIdx) => {
             const column = pageElements[colId];
             if (!column) return null;
+
+            const colStyle = {
+              ...column.style,
+              display: 'flex',
+              flexDirection: 'column',
+              flex: 1,
+              minHeight: '80px',
+              padding: '12px',
+              border: state.selectedElementId === column.id ? '2px solid #ec4899' : '1px dashed #cbd5e1',
+              borderRadius: '4px',
+              backgroundColor: state.selectedElementId === column.id ? '#fce7f3' : '#f8fafc',
+              position: 'relative',
+              zIndex: state.selectedElementId === column.id ? 10 : 2,
+            };
+
             return (
-              <div key={column.id} className="hierarchical-column" data-element-id={column.id}>
-                <div className="column-header">Column: {column.name || 'Untitled'}</div>
-                <div className="column-elements">
-                  {(column.elements || []).map((elemId) => {
+              <div
+                key={column.id}
+                className="hierarchical-column"
+                data-element-id={column.id}
+                data-element-type="column"
+                style={colStyle}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dispatch({ type: 'SELECT_ELEMENT', elementId: column.id, sectionId });
+                }}
+                data-testid={`hierarchical-column-${column.id}`}
+              >
+                {/* Column label */}
+                <div
+                  style={{
+                    fontSize: '10px',
+                    fontWeight: '500',
+                    color: '#94a3b8',
+                    marginBottom: '4px',
+                  }}
+                >
+                  Col
+                </div>
+
+                {/* Column actions */}
+                <button
+                  className="element-action-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    dispatch({ type: 'DELETE_ELEMENT_HIERARCHY', elementId: column.id });
+                  }}
+                  title="Delete column"
+                  type="button"
+                  style={{ position: 'absolute', top: '2px', right: '2px', padding: '2px' }}
+                >
+                  <Trash2 size={10} />
+                </button>
+
+                {/* Elements inside column */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {(column.elements || []).map((elemId, elemIdx) => {
                     const element = pageElements[elemId];
                     if (!element) return null;
                     const elementData = element.element || element;
@@ -350,17 +514,23 @@ function CanvasSection({ section, index, device, isHierarchical, pageElements })
                         element={element}
                         elementData={elementData}
                         sectionId={section.id}
+                        rowId={row.id}
                         columnId={column.id}
                       />
                     );
                   })}
+                  {(!column.elements || column.elements.length === 0) && (
+                    <div style={{ color: '#cbd5e1', fontSize: '12px', fontStyle: 'italic', padding: '8px' }}>
+                      Drop elements here
+                    </div>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
-      </div>
-    ));
+      );
+    });
   };
 
   // Render flat structure (original)
@@ -480,8 +650,8 @@ function CanvasSection({ section, index, device, isHierarchical, pageElements })
   );
 }
 
-// Hierarchical element component
-function HierarchicalElement({ element, elementData, sectionId, columnId }) {
+// Hierarchical element component with proper sizing/positioning
+function HierarchicalElement({ element, elementData, sectionId, rowId, columnId }) {
   const { state, dispatch } = useBuilder();
   const wrapperRef = useRef(null);
   const isSelected = state.selectedElementId === element.id;
@@ -503,38 +673,67 @@ function HierarchicalElement({ element, elementData, sectionId, columnId }) {
       id: Math.random().toString(36).substring(2, 11),
       parent_id: element.parent_id
     };
-    dispatch({ type: 'ADD_ELEMENT_TO_HIERARCHY', parentId: element.parent_id, element: newElement });
+    dispatch({ type: 'ADD_ELEMENT_TO_HIERARCHY', parentId: columnId, element: newElement });
   };
 
   const handleInlineContentChange = (nextContent) => {
     dispatch({
       type: 'UPDATE_ELEMENT_HIERARCHY',
       elementId: element.id,
-      updates: { content: nextContent, element: { ...elementData, content: nextContent } }
+      updates: { content: nextContent }
     });
+  };
+
+  const elementStyle = {
+    ...element.style,
+    padding: '8px',
+    border: isSelected ? '2px solid #10b981' : '1px solid #e5e7eb',
+    borderRadius: '4px',
+    backgroundColor: isSelected ? '#ecfdf5' : '#ffffff',
+    cursor: 'pointer',
+    position: 'relative',
+    zIndex: isSelected ? 10 : 3,
+    minHeight: '40px',
+    width: '100%',
+    boxSizing: 'border-box',
+    transition: 'all 0.15s ease',
   };
 
   return (
     <div
       ref={wrapperRef}
-      className={`hierarchical-element ${isSelected ? 'is-selected' : ''}`}
+      className="hierarchical-element"
+      data-element-id={element.id}
+      data-element-type={element.element_type}
+      style={elementStyle}
       onClick={handleSelect}
       data-testid={`hierarchical-element-${element.id}`}
     >
-      <div className="element-drag-handle" title="Select">
-        <GripVertical size={11} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '4px' }}>
+        <div style={{ flex: 1 }}>
+          <ElementRenderer element={elementData} editable={isSelected} onContentChange={handleInlineContentChange} />
+        </div>
+        <div style={{ display: 'flex', gap: '2px' }}>
+          <button
+            className="element-action-btn"
+            onClick={handleDuplicate}
+            title="Duplicate"
+            type="button"
+            style={{ padding: '2px', opacity: 0.6, ':hover': { opacity: 1 } }}
+          >
+            <Copy size={10} />
+          </button>
+          <button
+            className="element-action-btn danger"
+            onClick={handleDelete}
+            title="Delete"
+            type="button"
+            style={{ padding: '2px', opacity: 0.6, ':hover': { opacity: 1 } }}
+          >
+            <Trash2 size={10} />
+          </button>
+        </div>
       </div>
-
-      <div className="element-actions">
-        <button className="element-action-btn" onClick={handleDuplicate} title="Duplicate" data-testid={`duplicate-element-${element.id}`}>
-          <Copy size={11} />
-        </button>
-        <button className="element-action-btn danger" onClick={handleDelete} title="Delete" data-testid={`delete-element-${element.id}`}>
-          <Trash2 size={11} />
-        </button>
-      </div>
-
-      <ElementRenderer element={elementData} editable={isSelected} onContentChange={handleInlineContentChange} />
     </div>
   );
 }

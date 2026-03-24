@@ -56,6 +56,27 @@ const getNearestColumnAtPoint = (x, y, sectionId) => {
   return best;
 };
 
+const getNearestRowAtPoint = (x, y, sectionId) => {
+  if (typeof x !== 'number' || typeof y !== 'number') return null;
+  const rowEls = Array.from(document.querySelectorAll(`.canvas-section-content[data-section-id="${sectionId}"] .canvas-element-wrapper[data-element-type="row"]`));
+  if (!rowEls.length) return null;
+  let best = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  rowEls.forEach((rowEl) => {
+    const rect = rowEl.getBoundingClientRect();
+    const clampedX = clamp(x, rect.left, rect.right);
+    const clampedY = clamp(y, rect.top, rect.bottom);
+    const dx = x - clampedX;
+    const dy = y - clampedY;
+    const distance = (dx * dx) + (dy * dy);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = rowEl;
+    }
+  });
+  return best;
+};
+
 const projectDropPosition = (sectionContent, pointer) => {
   if (!sectionContent || !pointer) return null;
   const rect = sectionContent.getBoundingClientRect();
@@ -228,7 +249,14 @@ function BuilderInner() {
       if (sectionId) {
         const newElement = createDefaultElement(activeData.elementType);
         const targetColumn = pointerFromEvent ? getNearestColumnAtPoint(pointerFromEvent.x, pointerFromEvent.y, sectionId) : null;
-        if (targetColumn?.dataset?.elementId) {
+        const targetRow = pointerFromEvent ? getNearestRowAtPoint(pointerFromEvent.x, pointerFromEvent.y, sectionId) : null;
+
+        if (activeData.elementType === 'column' && targetRow?.dataset?.elementId) {
+          newElement.parentRowId = targetRow.dataset.elementId;
+        } else if (activeData.elementType === 'box' && targetColumn?.dataset?.elementId) {
+          newElement.parentColumnId = targetColumn.dataset.elementId;
+          if (targetColumn.dataset.parentRowId) newElement.parentRowId = targetColumn.dataset.parentRowId;
+        } else if (targetColumn?.dataset?.elementId) {
           newElement.parentColumnId = targetColumn.dataset.elementId;
           if (targetColumn.dataset.parentRowId) {
             newElement.parentRowId = targetColumn.dataset.parentRowId;

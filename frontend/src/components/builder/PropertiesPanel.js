@@ -13,9 +13,6 @@ import {
   Code,
   Eye,
   FileCode2,
-  Monitor,
-  Tablet,
-  Smartphone,
 } from 'lucide-react';
 
 const ICON_OPTIONS = [
@@ -351,51 +348,31 @@ function InactiveTabState({ label }) {
 }
 
 export default function PropertiesPanel() {
-  const { state, dispatch, getSelectedElement, getSelectedSection, deviceView } = useBuilder();
+  const { state, dispatch, getSelectedElement, getSelectedSection } = useBuilder();
   const [activeTab, setActiveTab] = useState('style');
-  const [selectedDevice, setSelectedDevice] = useState('desktop'); // Device override: desktop, tablet, mobile
   const [panelPos, setPanelPos] = useState({ left: 0, top: 0 });
   const [panelReady, setPanelReady] = useState(false);
   const panelRef = useRef(null);
   const dragRef = useRef(null);
   const el = getSelectedElement();
   const section = getSelectedSection();
-  const isHierarchical = !!el && !!el.parent_id ? true : state.page.elements && Object.keys(state.page.elements).length > 0;
   
   const handleClose = () => dispatch({ type: 'DESELECT' });
 
   const us = (k, v) => {
     if (!el) return;
     
+    const isHierarchical = !!el.parent_id ? true : state.page.elements && Object.keys(state.page.elements).length > 0;
+    
     if (isHierarchical) {
-      // For hierarchical elements, use device-specific update
-      if (selectedDevice === 'tablet') {
-        dispatch({
-          type: 'UPDATE_ELEMENT_HIERARCHY',
-          elementId: el.id,
-          updates: {
-            tablet_style: { ...el.tablet_style, [k]: v }
-          }
-        });
-      } else if (selectedDevice === 'mobile') {
-        dispatch({
-          type: 'UPDATE_ELEMENT_HIERARCHY',
-          elementId: el.id,
-          updates: {
-            mobile_style: { ...el.mobile_style, [k]: v }
-          }
-        });
-      } else {
-        dispatch({
-          type: 'UPDATE_ELEMENT_HIERARCHY',
-          elementId: el.id,
-          updates: {
-            style: { ...el.style, [k]: v }
-          }
-        });
-      }
+      dispatch({
+        type: 'UPDATE_ELEMENT_HIERARCHY',
+        elementId: el.id,
+        updates: {
+          style: { ...el.style, [k]: v }
+        }
+      });
     } else {
-      // For flat elements, update normally (device overrides not yet supported for flat)
       dispatch({
         type: 'UPDATE_ELEMENT',
         elementId: el.id,
@@ -506,80 +483,6 @@ export default function PropertiesPanel() {
         <span className="fp-title">{typeName}</span>
         <button className="fp-close" onClick={handleClose} data-testid="properties-close-btn" type="button"><X size={18} /></button>
       </div>
-
-      {el && (
-        <div className="fp-device-selector" style={{ display: 'flex', gap: 4, padding: '8px 12px', borderBottom: '1px solid #e5e7eb', background: '#fafafa' }}>
-          <button
-            className={`fp-device-btn ${selectedDevice === 'desktop' ? 'active' : ''}`}
-            onClick={() => setSelectedDevice('desktop')}
-            title="Desktop styles"
-            type="button"
-            style={{
-              flex: 1,
-              padding: '6px 10px',
-              borderRadius: 4,
-              border: `1px solid ${selectedDevice === 'desktop' ? '#6366f1' : '#d1d5db'}`,
-              background: selectedDevice === 'desktop' ? '#f0f4ff' : '#ffffff',
-              color: selectedDevice === 'desktop' ? '#6366f1' : '#6b7280',
-              fontSize: 12,
-              fontWeight: 500,
-              cursor: 'pointer',
-              display: 'flex', 
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 4
-            }}
-          >
-            <Monitor size={14} /> Desktop
-          </button>
-          <button
-            className={`fp-device-btn ${selectedDevice === 'tablet' ? 'active' : ''}`}
-            onClick={() => setSelectedDevice('tablet')}
-            title="Tablet styles (override)"
-            type="button"
-            style={{
-              flex: 1,
-              padding: '6px 10px',
-              borderRadius: 4,
-              border: `1px solid ${selectedDevice === 'tablet' ? '#6366f1' : '#d1d5db'}`,
-              background: selectedDevice === 'tablet' ? '#f0f4ff' : '#ffffff',
-              color: selectedDevice === 'tablet' ? '#6366f1' : '#6b7280',
-              fontSize: 12,
-              fontWeight: 500,
-              cursor: 'pointer',
-              display: 'flex', 
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 4
-            }}
-          >
-            <Tablet size={14} /> Tablet
-          </button>
-          <button
-            className={`fp-device-btn ${selectedDevice === 'mobile' ? 'active' : ''}`}
-            onClick={() => setSelectedDevice('mobile')}
-            title="Mobile styles (override)"
-            type="button"
-            style={{
-              flex: 1,
-              padding: '6px 10px',
-              borderRadius: 4,
-              border: `1px solid ${selectedDevice === 'mobile' ? '#6366f1' : '#d1d5db'}`,
-              background: selectedDevice === 'mobile' ? '#f0f4ff' : '#ffffff',
-              color: selectedDevice === 'mobile' ? '#6366f1' : '#6b7280',
-              fontSize: 12,
-              fontWeight: 500,
-              cursor: 'pointer',
-              display: 'flex', 
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 4
-            }}
-          >
-            <Smartphone size={14} /> Mobile
-          </button>
-        </div>
-      )}
 
       <div className="fp-body">
         <div className="fp-tab-rail">
