@@ -199,6 +199,21 @@ export const createDefaultElement = (type) => {
       },
       style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', padding: '16px' }
     },
+    row: {
+      id, type: 'row', surface: true,
+      content: { columnRatio: '6:6', equalColumnHeight: false, verticalAlign: 'top', align: 'left', stretchFullWidth: false },
+      style: { width: '960px', height: '220px', backgroundColor: 'transparent', border: '1px dashed rgba(120, 134, 156, 0.5)', borderRadius: '8px' }
+    },
+    column: {
+      id, type: 'column', surface: true,
+      content: { ratio: 6, index: 0 },
+      style: { width: '460px', height: '220px', backgroundColor: 'transparent', border: '1px dashed rgba(120, 134, 156, 0.4)', borderRadius: '8px' }
+    },
+    box: {
+      id, type: 'box', surface: true,
+      content: { tone: 'light' },
+      style: { width: '420px', height: '240px', backgroundColor: 'rgba(255,255,255,0.72)', borderRadius: '18px', border: '1px solid rgba(255,255,255,0.35)', boxShadow: '0 18px 42px rgba(15, 23, 42, 0.12)' }
+    },
     divider: {
       id, type: 'divider', content: '',
       style: { borderTop: '1px solid #e5e7eb', margin: '16px 0', width: '100%' }

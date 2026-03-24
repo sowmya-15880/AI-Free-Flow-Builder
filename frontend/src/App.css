@@ -924,16 +924,19 @@
 .canvas-element-wrapper.free-flow {
   position: absolute;
   max-width: calc(100% - 24px);
-  min-width: 120px;
   z-index: 5;
+  box-sizing: border-box;
 }
 
 .canvas-element-wrapper.is-surface-element {
   z-index: 1;
+  opacity: 0.9;
 }
 
 .canvas-element-wrapper.is-leaf-element {
-  z-index: 6;
+  z-index: 8;
+  width: fit-content;
+  max-width: calc(100% - 24px);
 }
 
 .canvas-element-wrapper.element-type-row,
@@ -946,6 +949,7 @@
   width: 100%;
   height: 100%;
   box-sizing: border-box;
+  pointer-events: none;
 }
 
 .canvas-element-wrapper.element-type-row .layout-surface-inner {
@@ -958,6 +962,17 @@
 
 .canvas-element-wrapper.element-type-box .layout-surface-inner {
   background: rgba(255, 255, 255, 0.78);
+}
+
+.canvas-element-content.is-leaf-content {
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.canvas-element-content.is-surface-content {
+  width: 100%;
+  height: 100%;
 }
 
 .canvas-element-wrapper .inline-svg-icon svg {
@@ -982,6 +997,24 @@
   pointer-events: none;
 }
 
+.surface-select-chip {
+  position: absolute;
+  top: -24px;
+  left: 0;
+  height: 20px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(31, 39, 52, 0.92);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: capitalize;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  z-index: 9;
+}
+
 .canvas-element-wrapper.is-dragging-free {
   opacity: 0.86;
   cursor: grabbing;
@@ -1004,6 +1037,14 @@
   opacity: 1;
 }
 
+.canvas-section-content.has-active-element .canvas-element-wrapper.is-surface-element {
+  opacity: 0.18;
+}
+
+.canvas-section-content.has-active-element .canvas-element-wrapper.is-surface-element .surface-select-chip {
+  opacity: 0.9;
+}
+
 .element-drag-handle {
   position: absolute;
   right: -12px;
@@ -1019,7 +1060,7 @@
   align-items: center;
   justify-content: center;
   cursor: grab;
-  z-index: 7;
+  z-index: 10;
 }
 
 .canvas-element-wrapper:hover .element-drag-handle,
@@ -1033,7 +1074,7 @@
   right: 0;
   display: none;
   gap: 4px;
-  z-index: 7;
+  z-index: 10;
 }
 
 .canvas-element-wrapper:hover .element-actions,
