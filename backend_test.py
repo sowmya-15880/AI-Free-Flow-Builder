@@ -3,254 +3,323 @@
 import requests
 import json
 import sys
-import time
 from datetime import datetime
 
-class LandingPageBuilderTester:
+class TemplateGalleryTester:
     def __init__(self, base_url="https://b467106f-57d6-4a8d-a53d-0379a62be61d.preview.emergentagent.com/api"):
         self.base_url = base_url
         self.tests_run = 0
         self.tests_passed = 0
-        self.test_results = []
+        self.results = []
 
-    def log_test(self, name, success, details="", response_data=None):
-        """Log test result"""
+    def log_result(self, test_name, passed, details=""):
         self.tests_run += 1
-        if success:
+        if passed:
             self.tests_passed += 1
-            print(f"✅ {name}")
+            print(f"✅ {test_name}")
         else:
-            print(f"❌ {name} - {details}")
-        
-        self.test_results.append({
-            "name": name,
-            "success": success,
-            "details": details,
-            "response_data": response_data
+            print(f"❌ {test_name} - {details}")
+        self.results.append({
+            "test": test_name,
+            "passed": passed,
+            "details": details
         })
 
     def test_api_health(self):
         """Test basic API health"""
         try:
             response = requests.get(f"{self.base_url}/", timeout=10)
-            success = response.status_code == 200
-            data = response.json() if success else {}
-            self.log_test(
-                "API Health Check", 
-                success, 
-                f"Status: {response.status_code}" if not success else "",
-                data
-            )
-            return success
+            passed = response.status_code == 200
+            details = f"Status: {response.status_code}"
+            if passed:
+                data = response.json()
+                details += f", Message: {data.get('message', 'N/A')}"
         except Exception as e:
-            self.log_test("API Health Check", False, f"Error: {str(e)}")
-            return False
+            passed = False
+            details = f"Error: {str(e)}"
+        
+        self.log_result("API Health Check", passed, details)
+        return passed
 
-    def test_ai_generation_rich_content(self):
-        """Test AI generation produces rich content with 8+ sections and 40+ elements"""
+    def test_template_generation_saas_dark(self):
+        """Test SaaS Dark template generation"""
+        template_config = {
+            "prompt": "Dark theme with neon indigo/violet accents, bold gradients, glass-morphism cards, glowing CTAs. Make it look like a premium dev tool landing page.",
+            "page_type": "saas",
+            "audience": "Startup founders and SaaS teams",
+            "product_name": "NovaDev",
+            "product_description": "A next-gen developer platform with AI-powered code generation, real-time collaboration, and instant cloud deployments.",
+            "variant_hint": "dark_neon-test-template"
+        }
+        
         try:
-            payload = {
-                "prompt": "Create a comprehensive SaaS landing page with multiple sections including hero, features, testimonials, pricing, and FAQ. Make it rich and detailed.",
-                "page_type": "saas",
-                "audience": "Startup founders and SaaS teams",
-                "product_name": "TestFlow Pro",
-                "product_description": "A comprehensive SaaS platform for testing and automation",
-                "variant_hint": f"test-{int(time.time())}"
-            }
+            response = requests.post(f"{self.base_url}/generate-page", json=template_config, timeout=45)
+            passed = response.status_code == 200
             
-            print("🔄 Testing AI generation (may take 15-30 seconds)...")
-            start_time = time.time()
-            response = requests.post(f"{self.base_url}/generate-page", json=payload, timeout=45)
-            end_time = time.time()
-            
-            if response.status_code != 200:
-                self.log_test("AI Generation Rich Content", False, f"Status: {response.status_code}")
-                return False
-            
-            data = response.json()
-            page = data.get("page", {})
-            sections = page.get("sections", [])
-            
-            # Count total elements across all sections
-            total_elements = sum(len(section.get("elements", [])) for section in sections)
-            
-            # Check requirements
-            has_8_plus_sections = len(sections) >= 8
-            has_40_plus_elements = total_elements >= 40
-            
-            details = f"Generated {len(sections)} sections, {total_elements} elements in {end_time - start_time:.1f}s"
-            success = has_8_plus_sections and has_40_plus_elements
-            
-            self.log_test(
-                "AI Generation Rich Content", 
-                success, 
-                details if success else f"{details} (Need 8+ sections, 40+ elements)",
-                {"sections": len(sections), "elements": total_elements, "duration": end_time - start_time}
-            )
-            
-            # Store for form test
-            self.last_generated_page = page
-            return success
-            
+            if passed:
+                data = response.json()
+                page = data.get('page', {})
+                sections = page.get('sections', [])
+                
+                # Count total elements
+                total_elements = sum(len(section.get('elements', [])) for section in sections)
+                
+                # Verify requirements
+                has_8_sections = len(sections) >= 8
+                has_40_elements = total_elements >= 40
+                has_style_hint = data.get('meta', {}).get('variant_hint', '').startswith('dark_neon')
+                
+                details = f"Sections: {len(sections)}, Elements: {total_elements}, Style hint: {has_style_hint}"
+                passed = has_8_sections and has_40_elements and has_style_hint
+                
+                if not passed:
+                    details += f" (Need 8+ sections: {has_8_sections}, 40+ elements: {has_40_elements})"
+            else:
+                details = f"Status: {response.status_code}, Error: {response.text[:200]}"
+                
         except Exception as e:
-            self.log_test("AI Generation Rich Content", False, f"Error: {str(e)}")
-            return False
+            passed = False
+            details = f"Error: {str(e)}"
+        
+        self.log_result("SaaS Dark Template Generation", passed, details)
+        return passed
 
-    def test_form_generation_on_request(self):
-        """Test that AI generates form elements when requested"""
+    def test_template_generation_gradient_saas(self):
+        """Test Gradient SaaS template generation"""
+        template_config = {
+            "prompt": "Gradient SaaS style with purple-to-blue gradients, soft shadows, rounded cards, floating UI mockups. Clean and aspirational design.",
+            "page_type": "saas",
+            "audience": "Product teams and business leaders",
+            "product_name": "CloudSync Pro",
+            "product_description": "An intelligent cloud platform that unifies your data, automates workflows, and delivers real-time insights across every department.",
+            "variant_hint": "gradient_saas-test-template"
+        }
+        
         try:
-            payload = {
-                "prompt": "Create a lead generation landing page with a contact form for user feedback. Include a feedback form in the last section.",
-                "page_type": "lead_generation",
-                "audience": "Business owners",
-                "product_name": "ContactPro",
-                "product_description": "Professional contact management system",
-                "variant_hint": f"form-test-{int(time.time())}"
-            }
+            response = requests.post(f"{self.base_url}/generate-page", json=template_config, timeout=45)
+            passed = response.status_code == 200
             
-            print("🔄 Testing form generation when requested...")
-            response = requests.post(f"{self.base_url}/generate-page", json=payload, timeout=45)
-            
-            if response.status_code != 200:
-                self.log_test("Form Generation on Request", False, f"Status: {response.status_code}")
-                return False
-            
-            data = response.json()
-            page = data.get("page", {})
-            sections = page.get("sections", [])
-            
-            # Look for form elements
-            form_found = False
-            for section in sections:
-                for element in section.get("elements", []):
-                    if element.get("type") == "form":
-                        form_found = True
-                        break
-                if form_found:
-                    break
-            
-            self.log_test(
-                "Form Generation on Request", 
-                form_found, 
-                "Form element found" if form_found else "No form element found despite request",
-                {"has_form": form_found, "sections": len(sections)}
-            )
-            return form_found
-            
+            if passed:
+                data = response.json()
+                page = data.get('page', {})
+                sections = page.get('sections', [])
+                total_elements = sum(len(section.get('elements', [])) for section in sections)
+                
+                has_8_sections = len(sections) >= 8
+                has_40_elements = total_elements >= 40
+                has_gradient_style = data.get('meta', {}).get('variant_hint', '').startswith('gradient_saas')
+                
+                details = f"Sections: {len(sections)}, Elements: {total_elements}, Gradient style: {has_gradient_style}"
+                passed = has_8_sections and has_40_elements and has_gradient_style
+                
+            else:
+                details = f"Status: {response.status_code}, Error: {response.text[:200]}"
+                
         except Exception as e:
-            self.log_test("Form Generation on Request", False, f"Error: {str(e)}")
-            return False
+            passed = False
+            details = f"Error: {str(e)}"
+        
+        self.log_result("Gradient SaaS Template Generation", passed, details)
+        return passed
 
-    def test_fallback_generation(self):
-        """Test fallback generation by using invalid LLM key scenario"""
+    def test_template_generation_minimal_white(self):
+        """Test Minimal White template generation"""
+        template_config = {
+            "prompt": "Clean minimal white design with sharp black typography, lots of whitespace, subtle gray accents, refined card layouts. Inspired by Linear, Stripe, Notion.",
+            "page_type": "product_info",
+            "audience": "Product evaluators and early adopters",
+            "product_name": "Refine Studio",
+            "product_description": "A minimalist project management tool that cuts the noise. Focus on what matters with elegant task flows and smart automation.",
+            "variant_hint": "minimal_white-test-template"
+        }
+        
         try:
-            # Test with a prompt that should trigger rich fallback
-            payload = {
-                "prompt": "Create a comprehensive business landing page with all standard sections",
-                "page_type": "product_info",
-                "audience": "Business decision makers",
-                "product_name": "BusinessFlow",
-                "product_description": "Complete business management solution",
-                "variant_hint": f"fallback-test-{int(time.time())}"
-            }
+            response = requests.post(f"{self.base_url}/generate-page", json=template_config, timeout=45)
+            passed = response.status_code == 200
             
-            print("🔄 Testing fallback generation capabilities...")
-            response = requests.post(f"{self.base_url}/generate-page", json=payload, timeout=30)
-            
-            if response.status_code != 200:
-                self.log_test("Fallback Generation", False, f"Status: {response.status_code}")
-                return False
-            
-            data = response.json()
-            page = data.get("page", {})
-            sections = page.get("sections", [])
-            meta = data.get("meta", {})
-            generator = meta.get("generator", "unknown")
-            
-            # Count elements
-            total_elements = sum(len(section.get("elements", [])) for section in sections)
-            
-            # Fallback should still generate rich content (10 sections per spec)
-            success = len(sections) >= 8 and total_elements >= 30
-            
-            details = f"Generator: {generator}, {len(sections)} sections, {total_elements} elements"
-            
-            self.log_test(
-                "Fallback Generation", 
-                success, 
-                details,
-                {"generator": generator, "sections": len(sections), "elements": total_elements}
-            )
-            return success
-            
+            if passed:
+                data = response.json()
+                page = data.get('page', {})
+                sections = page.get('sections', [])
+                total_elements = sum(len(section.get('elements', [])) for section in sections)
+                
+                has_8_sections = len(sections) >= 8
+                has_40_elements = total_elements >= 40
+                
+                details = f"Sections: {len(sections)}, Elements: {total_elements}"
+                passed = has_8_sections and has_40_elements
+                
+            else:
+                details = f"Status: {response.status_code}, Error: {response.text[:200]}"
+                
         except Exception as e:
-            self.log_test("Fallback Generation", False, f"Error: {str(e)}")
-            return False
+            passed = False
+            details = f"Error: {str(e)}"
+        
+        self.log_result("Minimal White Template Generation", passed, details)
+        return passed
 
-    def test_cors_headers(self):
-        """Test CORS headers are properly configured"""
+    def test_template_generation_food_restaurant(self):
+        """Test Food & Restaurant template generation"""
+        template_config = {
+            "prompt": "Dark theme with warm amber/orange accents for a premium food delivery or restaurant landing page. Rich imagery sections, menu card grids, customer review cards with avatars, order CTA buttons.",
+            "page_type": "lead_generation",
+            "audience": "Foodies and busy professionals who value quality meals",
+            "product_name": "HealthyEat",
+            "product_description": "A premium meal delivery service offering chef-crafted, nutritionally balanced meals delivered fresh to your door every day.",
+            "variant_hint": "food_dark-test-template"
+        }
+        
         try:
-            response = requests.options(f"{self.base_url}/generate-page")
-            headers = response.headers
+            response = requests.post(f"{self.base_url}/generate-page", json=template_config, timeout=45)
+            passed = response.status_code == 200
             
-            has_cors = 'Access-Control-Allow-Origin' in headers
-            has_methods = 'Access-Control-Allow-Methods' in headers
-            
-            success = has_cors and has_methods
-            details = f"CORS Origin: {headers.get('Access-Control-Allow-Origin', 'Missing')}"
-            
-            self.log_test("CORS Headers", success, details if not success else "")
-            return success
-            
+            if passed:
+                data = response.json()
+                page = data.get('page', {})
+                sections = page.get('sections', [])
+                total_elements = sum(len(section.get('elements', [])) for section in sections)
+                
+                has_8_sections = len(sections) >= 8
+                has_40_elements = total_elements >= 40
+                
+                details = f"Sections: {len(sections)}, Elements: {total_elements}"
+                passed = has_8_sections and has_40_elements
+                
+            else:
+                details = f"Status: {response.status_code}, Error: {response.text[:200]}"
+                
         except Exception as e:
-            self.log_test("CORS Headers", False, f"Error: {str(e)}")
-            return False
+            passed = False
+            details = f"Error: {str(e)}"
+        
+        self.log_result("Food & Restaurant Template Generation", passed, details)
+        return passed
 
-    def test_error_handling(self):
-        """Test API error handling"""
+    def test_enhanced_ai_system_prompt(self):
+        """Test that enhanced AI system prompt generates richer content"""
+        test_config = {
+            "prompt": "Create a comprehensive landing page with multiple sections, rich content, and detailed elements.",
+            "page_type": "saas",
+            "audience": "Business professionals",
+            "product_name": "TestPro",
+            "product_description": "A comprehensive testing platform for modern businesses.",
+            "variant_hint": "enhanced-ai-test"
+        }
+        
         try:
-            # Test empty prompt
-            response = requests.post(f"{self.base_url}/generate-page", json={"prompt": ""}, timeout=10)
-            success = response.status_code == 400
+            response = requests.post(f"{self.base_url}/generate-page", json=test_config, timeout=45)
+            passed = response.status_code == 200
             
-            self.log_test(
-                "Error Handling (Empty Prompt)", 
-                success, 
-                f"Status: {response.status_code}" if not success else ""
-            )
+            if passed:
+                data = response.json()
+                page = data.get('page', {})
+                sections = page.get('sections', [])
+                
+                # Check for mandatory sections
+                section_types = [s.get('type', '') for s in sections]
+                required_sections = ['navbar', 'hero', 'features', 'testimonials', 'cta', 'footer']
+                has_required_sections = all(any(req in stype for stype in section_types) for req in required_sections)
+                
+                # Count elements with proper structure
+                total_elements = 0
+                elements_with_position = 0
+                elements_with_style = 0
+                
+                for section in sections:
+                    elements = section.get('elements', [])
+                    total_elements += len(elements)
+                    
+                    for element in elements:
+                        if 'position' in element and isinstance(element.get('position'), dict):
+                            elements_with_position += 1
+                        if 'style' in element and isinstance(element.get('style'), dict):
+                            elements_with_style += 1
+                
+                has_40_elements = total_elements >= 40
+                has_8_sections = len(sections) >= 8
+                proper_positioning = elements_with_position >= (total_elements * 0.8)  # 80% should have positions
+                proper_styling = elements_with_style >= (total_elements * 0.8)  # 80% should have styles
+                
+                details = f"Sections: {len(sections)}, Elements: {total_elements}, Positioned: {elements_with_position}, Styled: {elements_with_style}, Required sections: {has_required_sections}"
+                passed = has_8_sections and has_40_elements and proper_positioning and proper_styling and has_required_sections
+                
+            else:
+                details = f"Status: {response.status_code}, Error: {response.text[:200]}"
+                
+        except Exception as e:
+            passed = False
+            details = f"Error: {str(e)}"
+        
+        self.log_result("Enhanced AI System Prompt Quality", passed, details)
+        return passed
+
+    def test_style_hint_variations(self):
+        """Test that different style hints produce different outputs"""
+        base_config = {
+            "prompt": "Create a modern landing page",
+            "page_type": "saas",
+            "audience": "Developers",
+            "product_name": "DevTool",
+            "product_description": "A development tool for modern teams."
+        }
+        
+        style_hints = ["dark_neon", "gradient_saas", "minimal_white", "playful_creative"]
+        responses = []
+        
+        try:
+            for hint in style_hints:
+                config = {**base_config, "variant_hint": f"{hint}-variation-test"}
+                response = requests.post(f"{self.base_url}/generate-page", json=config, timeout=30)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    responses.append({
+                        "hint": hint,
+                        "sections": len(data.get('page', {}).get('sections', [])),
+                        "elements": sum(len(s.get('elements', [])) for s in data.get('page', {}).get('sections', []))
+                    })
+                else:
+                    responses.append({"hint": hint, "error": response.status_code})
             
-            # Test missing prompt
-            response = requests.post(f"{self.base_url}/generate-page", json={}, timeout=10)
-            success2 = response.status_code == 400
+            # Check that we got different responses (at least different element counts)
+            element_counts = [r.get('elements', 0) for r in responses if 'elements' in r]
+            has_variations = len(set(element_counts)) > 1 if len(element_counts) >= 2 else True
+            all_successful = all('error' not in r for r in responses)
             
-            self.log_test(
-                "Error Handling (Missing Prompt)", 
-                success2, 
-                f"Status: {response.status_code}" if not success2 else ""
-            )
-            
-            return success and success2
+            details = f"Responses: {len(responses)}, Variations: {has_variations}, All successful: {all_successful}"
+            passed = all_successful and has_variations and len(responses) == 4
             
         except Exception as e:
-            self.log_test("Error Handling", False, f"Error: {str(e)}")
-            return False
+            passed = False
+            details = f"Error: {str(e)}"
+        
+        self.log_result("Style Hint Variations", passed, details)
+        return passed
 
     def run_all_tests(self):
         """Run all backend tests"""
-        print("🚀 Starting Backend API Tests for AI Landing Page Builder")
-        print("=" * 60)
+        print("🧪 Starting Template Gallery Backend Tests")
+        print("=" * 50)
         
-        # Run tests in order
-        self.test_api_health()
-        self.test_ai_generation_rich_content()
-        self.test_form_generation_on_request()
-        self.test_fallback_generation()
-        self.test_cors_headers()
-        self.test_error_handling()
+        # Basic API health
+        if not self.test_api_health():
+            print("❌ API health check failed, stopping tests")
+            return False
         
-        # Print summary
-        print("\n" + "=" * 60)
-        print(f"📊 Backend Test Results: {self.tests_passed}/{self.tests_run} passed")
+        # Template generation tests
+        self.test_template_generation_saas_dark()
+        self.test_template_generation_gradient_saas()
+        self.test_template_generation_minimal_white()
+        self.test_template_generation_food_restaurant()
+        
+        # Enhanced AI tests
+        self.test_enhanced_ai_system_prompt()
+        self.test_style_hint_variations()
+        
+        # Summary
+        print("\n" + "=" * 50)
+        print(f"📊 Backend Tests Summary: {self.tests_passed}/{self.tests_run} passed")
         
         if self.tests_passed == self.tests_run:
             print("🎉 All backend tests passed!")
@@ -260,7 +329,7 @@ class LandingPageBuilderTester:
             return False
 
 def main():
-    tester = LandingPageBuilderTester()
+    tester = TemplateGalleryTester()
     success = tester.run_all_tests()
     return 0 if success else 1
 

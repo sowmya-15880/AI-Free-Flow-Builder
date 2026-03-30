@@ -9,10 +9,11 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 12px 20px;
+  justify-content: flex-start;
+  padding: 24px 20px;
   position: relative;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .prompt-page::before {
@@ -32,12 +33,177 @@
   z-index: 1;
   max-width: 720px;
   width: 100%;
-  max-height: calc(100vh - 24px);
-  max-height: calc(100dvh - 24px);
   display: flex;
   flex-direction: column;
-  justify-content: space-evenly;
+  overflow: visible;
+}
+
+.prompt-content-wide {
+  max-width: 960px;
+}
+
+.prompt-header-row {
+  margin-bottom: 8px;
+}
+
+/* ---- TABS ---- */
+.prompt-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  padding: 4px;
+  background: #222226;
+  border-radius: 14px;
+  width: fit-content;
+}
+
+.prompt-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 22px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: #8e8e96;
+  font-family: 'Manrope', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.prompt-tab:hover {
+  color: #c4c8d1;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.prompt-tab-active {
+  background: #e74c6f;
+  color: #ffffff;
+}
+
+.prompt-tab-active:hover {
+  background: #d43d60;
+  color: #ffffff;
+}
+
+/* ---- TEMPLATE GALLERY ---- */
+.template-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.template-gallery-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.template-gallery-desc {
+  color: #8e8e96;
+  font-size: 14px;
+  max-width: 480px;
+}
+
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.template-card {
+  display: flex;
+  flex-direction: column;
+  background: #222226;
+  border: 1px solid #2e2e34;
+  border-radius: 16px;
   overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.25s, transform 0.2s, box-shadow 0.25s;
+  text-align: left;
+  font-family: 'Manrope', sans-serif;
+  padding: 0;
+}
+
+.template-card:hover {
+  border-color: #e74c6f;
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(231, 76, 111, 0.1);
+}
+
+.template-card-preview {
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.template-card-preview::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.2) 100%);
+}
+
+.template-card-body {
+  padding: 16px 16px 8px;
+  flex: 1;
+}
+
+.template-card-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #f4f4f5;
+  margin: 0 0 6px 0;
+}
+
+.template-card-desc {
+  font-size: 13px;
+  color: #8e8e96;
+  line-height: 1.45;
+  margin: 0 0 10px 0;
+}
+
+.template-card-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.template-tag {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 100px;
+  background: rgba(231, 76, 111, 0.08);
+  border: 1px solid rgba(231, 76, 111, 0.18);
+  color: #e74c6f;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.template-card-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 16px;
+  color: #8e8e96;
+  font-size: 13px;
+  font-weight: 600;
+  border-top: 1px solid #2e2e34;
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.template-card:hover .template-card-action {
+  color: #e74c6f;
+  background: rgba(231, 76, 111, 0.04);
 }
 
 .prompt-badge {
@@ -271,9 +437,8 @@
     padding: 12px 16px;
   }
 
-  .prompt-content {
-    max-height: calc(100vh - 24px);
-    max-height: calc(100dvh - 24px);
+  .prompt-content-wide {
+    max-width: 100%;
   }
 
   .prompt-import-bar {
@@ -282,6 +447,21 @@
 
   .prompt-form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .template-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .template-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .template-gallery-header {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 

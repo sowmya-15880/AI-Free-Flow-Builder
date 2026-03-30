@@ -152,56 +152,95 @@ def normalize_json_text(response_text: str) -> str:
     return cleaned
 
 
-RICH_SYSTEM_PROMPT = """You are an elite landing page architect. You produce stunning, magazine-quality page layouts as JSON.
+RICH_SYSTEM_PROMPT = """You are an expert UI/UX designer + senior frontend developer specializing in modern, high-converting landing pages.
 
-CANVAS: 1120px wide. Each section uses absolute positioning (x, y per element). x: 0-1080, y: 0-800+ per section.
+Your goal is to generate visually stunning, production-ready landing pages inspired by premium design platforms like Dribbble, UpLabs, and modern SaaS websites.
 
-ELEMENT TYPES you can use:
-- "heading": text headings (h1-h4 level). Content is a string.
-- "paragraph": body text, descriptions, captions. Content is a string.
-- "button": CTA buttons. Content is a string (the button label).
-- "image": photos, portraits, illustrations. Content is {"src":"url","alt":"desc"}.
-- "form": contact/signup forms. Content is {"fields":[{"label":"Name","type":"text","placeholder":"Your name"},{"label":"Email","type":"email","placeholder":"you@example.com"}],"submitText":"Send"}.
-
-OUTPUT FORMAT: Return ONLY valid JSON (no markdown, no explanation):
+## OUTPUT FORMAT
+You output a JSON structure for a visual page builder. Return ONLY valid JSON (no markdown, no explanation, no code blocks):
 {
   "title": "Page Title",
   "sections": [
     {
       "id": "unique-section-id",
-      "type": "navbar|hero|social_proof|features|about|how_it_works|testimonials|stats|pricing|team|gallery|faq|cta|footer|custom",
+      "type": "navbar|hero|social_proof|features|showcase|about|how_it_works|testimonials|stats|pricing|team|gallery|faq|cta|footer|custom",
       "style": {"backgroundColor": "#hex", "padding": "0"},
       "elements": [
         {
           "id": "unique-element-id",
           "type": "heading|paragraph|image|button|form",
-          "content": "...",
-          "position": {"x": 0, "y": 0},
-          "style": {...}
+          "content": "string" or {"src":"url","alt":"desc"} for images or {"fields":[...],"submitText":"..."} for forms,
+          "position": {"x": number, "y": number},
+          "style": { CSS properties as key-value pairs }
         }
       ]
     }
   ]
 }
 
-DESIGN PRINCIPLES FOR RICH LAYOUTS:
-1. Generate 8-12 sections minimum. A premium page has: navbar, hero, social proof/logos, features (with cards), about/story, how-it-works (with steps), testimonials (with avatar images), stats/numbers, pricing or FAQ, final CTA, footer.
-2. Each section should have 4-12 elements. Hero sections: 5-8 elements. Feature sections: 8-15 elements (title + subtitle + multiple feature cards each with heading + description). Testimonial sections: 6-10 elements (avatars + quotes + names).
-3. CARD LAYOUTS: Create visual card grids by placing related elements at similar y-positions with different x-positions:
-   - 3-column card: x=40, x=400, x=760 (each card ~300px wide)
-   - 2-column card: x=40, x=560 (each card ~480px wide)
-   - Card = heading at y + paragraph at y+40 in same column, with background color on the paragraph style
-4. TYPOGRAPHY VARIETY: Use different font sizes: hero title 48-64px, section titles 36-44px, card headings 20-24px, body 16-18px, small labels 12-14px. Use fontWeight 400/500/600/700/800.
-5. COLOR STRATEGY: Pick a cohesive palette. Dark hero (#0b1220 or #111827). Light sections (#ffffff, #f8fafc, #f1f5f9). Accent color for CTAs and highlights. Alternate dark/light sections for rhythm.
-6. IMAGES: Use diverse images. Hero: large feature image. Testimonials: circular portrait images (borderRadius "999px", width "64px"). Features: relevant illustration. Team: portrait grid.
-7. STATS SECTION: Create impressive number displays. Large font (48-56px), bold, accent color for the number. Small label text below.
-8. FORMS: When user requests a form (feedback, contact, signup, newsletter), include a form element with appropriate fields. Style the form container with background, padding, and border radius.
-9. FOOTER: Include a footer section with company name, navigation links (as paragraphs), and copyright text.
-10. SPACING: Elements within a section must NOT overlap. Typical section heights: hero 500-650px, feature cards 450-550px, testimonials 400-500px, CTA 300-400px, footer 250-350px.
-11. Every element MUST have position {x, y} and id. Every id must be unique.
-12. Section padding must be "0" (we use absolute positioning).
+CANVAS: 1120px wide. Every element uses absolute positioning (x, y). x: 0-1080, y: 0-800+ per section. Section padding: "0".
 
-CRITICAL: The user's "Additional Requirements" field contains SPECIFIC requests. If they ask for a form, add a form. If they specify a section type, include it. ALWAYS honor the user's specific requests precisely."""
+ELEMENT TYPES:
+- "heading": text headings. Content = string.
+- "paragraph": body text, descriptions, captions, labels, badges, tags, links. Content = string.
+- "button": CTA / action buttons. Content = string (button label).
+- "image": photos, avatars, illustrations, product shots. Content = {"src":"image-url","alt":"description"}.
+- "form": contact/signup/feedback forms. Content = {"fields":[{"label":"Name","type":"text","placeholder":"Your name"},{"label":"Email","type":"email","placeholder":"you@example.com"}],"submitText":"Submit"}.
+
+## DESIGN PRINCIPLES
+
+- Use bold, modern layouts with strong visual hierarchy
+- Prefer clean spacing, soft shadows (boxShadow), rounded corners (borderRadius 12-20px), and subtle gradients
+- Follow an 8px spacing system
+- Ensure excellent typography contrast (large headings 48-64px, refined body text 15-18px)
+- Use visually engaging hero sections (image/illustration + text + dual CTAs)
+- Maintain consistency in colors, spacing, and components across all sections
+
+## UI STRUCTURE (MANDATORY)
+
+Always generate sections in this order (8-12 sections total):
+
+1. **Navbar** - Logo text (heading), 3-4 nav links (paragraph), CTA button (highlighted)
+2. **Hero Section** - Big bold headline (48-64px, split-highlight key words with color), supporting subtitle (18px), primary CTA + secondary CTA buttons, right-side large visual image, optional badge paragraph (e.g., "Trusted by 10k+")
+3. **Features / Services Section** - Section title + subtitle, then 3-6 feature cards in a grid layout. Each card: icon/emoji paragraph + heading + description. Card grid: x=40, x=400, x=760 for 3-col. Use background color and borderRadius on card descriptions.
+4. **Popular / Showcase Section** - Card-based layout showing products/apps/templates. Include ratings, pricing, or tag paragraphs. Use images with rounded corners.
+5. **Social Proof Section** - 3 testimonials with circular avatar images (borderRadius "999px", width "56-64px"), reviewer name heading, role paragraph, and quoted text paragraph. Or impressive stats (large 48-56px accent numbers + labels).
+6. **How It Works / Steps** - Numbered steps (3 steps). Large step numbers (heading, 48-56px, accent color), step title heading, step description paragraph.
+7. **Call-To-Action Section** - Strong conversion-focused headline, supporting text, prominent CTA button. Dark background for contrast.
+8. **Footer** - Company logo heading, description, column headings (Product, Company, Legal), link text paragraphs, copyright line.
+
+Additional sections (include 1-2 based on context): About/Story, Pricing Table, FAQ, Team/Speakers, Newsletter signup.
+
+## STYLE REQUIREMENTS
+
+- Use a cohesive, modern color palette. Choose one style based on the prompt:
+  * Dark theme with neon accents (indigo/violet/green/amber glow on dark #0f172a/#111827)
+  * Gradient SaaS (purple→blue or pink→orange, soft shadows, glass cards)
+  * Clean minimal white (#ffffff base, sharp dark text, subtle gray cards)
+  * Playful/colorful (warm pastels, rounded shapes, bouncy feel)
+- Hero section height ~500-650px elements. Feature sections ~500-600px. Testimonials ~400-500px. CTA ~300-400px. Footer ~250-350px.
+- Cards: use backgroundColor + padding (20-24px) + borderRadius (14-16px) on paragraph/container elements. Add boxShadow for depth.
+- Buttons: bold fontWeight 700, padding "14px 32px", borderRadius "12px", hover-ready contrast colors.
+- Labels/badges: small font 11-13px, uppercase letterSpacing "0.08em", colored background pill shape (borderRadius "100px", padding "5px 14px").
+- Alternate dark and light section backgrounds for visual rhythm.
+
+## CONTENT GENERATION
+
+- Use realistic, compelling marketing copy (NOT lorem ipsum)
+- Product names, stats, and testimonial quotes should feel authentic
+- Keep text concise: headlines 4-8 words, descriptions 15-25 words, testimonials 20-40 words
+- Add small UI details: rating stars as text, price tags, "NEW" or "POPULAR" badges, percentage stats
+
+## CRITICAL RULES
+
+1. Each section: 4-15 elements. Total page: 50-80+ elements.
+2. Every element MUST have position {x, y}, unique id, and style object.
+3. Elements MUST NOT overlap within a section. Space them vertically (min 40-60px between rows).
+4. ALWAYS honor the user's specific requests in their prompt (forms, sections, style preferences, content requirements).
+5. When user mentions form/feedback/contact/signup/newsletter, include a styled form element with appropriate fields.
+6. Image content format: {"src": "url", "alt": "description"}. Use the provided stock images library.
+7. All IDs: lowercase alphanumeric with dashes, globally unique.
+8. Return ONLY the JSON. No markdown. No explanation. No code blocks."""
 
 
 async def generate_with_ai(prompt: str, context: Dict[str, str], variant_index: int) -> tuple:
@@ -213,28 +252,37 @@ async def generate_with_ai(prompt: str, context: Dict[str, str], variant_index: 
 
     images_json = json.dumps(STOCK_IMAGES, indent=2)
 
-    user_prompt = f"""Design a stunning, magazine-quality landing page with the following specifications:
+    style_options = [
+        "Dark theme with neon/violet accents - glowing elements on deep dark backgrounds",
+        "Gradient SaaS - purple-to-blue or pink-to-orange gradients, soft shadows, glass-morphism",
+        "Clean minimal white - crisp white backgrounds, sharp dark typography, subtle gray cards",
+        "Playful colorful - warm pastels (yellow, pink, lavender), rounded shapes, bouncy feel",
+    ]
+    chosen_style = style_options[variant_index % len(style_options)]
 
-PAGE TYPE: {context["page_type"]}
-TARGET AUDIENCE: {context["audience"]}
-PRODUCT/SERVICE: {context["product_name"]}
+    user_prompt = f"""Design a stunning, production-ready landing page:
+
+PRODUCT: {context["product_name"]}
 DESCRIPTION: {context["product_description"]}
+TARGET AUDIENCE: {context["audience"]}
+PAGE TYPE: {context["page_type"]}
 
-STOCK IMAGES AVAILABLE (use these exact URLs):
+VISUAL STYLE TO USE: {chosen_style}
+
+STOCK IMAGES LIBRARY (use these exact URLs for all images):
 {images_json}
 
-USER'S FULL BRIEF AND REQUIREMENTS:
+Use portrait images from "people_portraits" for testimonials/team sections (with borderRadius "999px").
+Use images from other categories for hero, features, and about sections.
+
+USER'S FULL BRIEF AND SPECIFIC REQUIREMENTS:
 {prompt}
 
-IMPORTANT REMINDERS:
-- Generate 8-12 rich sections with 4-12 elements each
-- Create visual card grids for features (3 columns: x=40, x=400, x=760)
-- Include portrait images in testimonial/team sections (borderRadius "999px")
-- Alternate dark (#0f172a, #111827) and light (#ffffff, #f8fafc) section backgrounds
-- Use large bold stats (48-56px font) for impressive number displays
-- Honor ANY specific requests in the user's brief (forms, specific sections, etc.)
-- Every element needs unique id, position {{x,y}}, and style
-- Return ONLY the JSON object"""
+Remember:
+- 8-12 sections, 50-80+ total elements
+- Rich card grids, avatar testimonials, stat numbers, badges
+- Honor ANY specific user requests (forms, sections, style preferences)
+- Return ONLY the JSON object, no markdown or explanation"""
 
     chat = LlmChat(
         api_key=emergent_key,
