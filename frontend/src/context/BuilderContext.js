@@ -249,13 +249,23 @@ const builderReducer = (state, action) => {
 
   switch (action.type) {
     case 'SET_PAGE': {
-      const page = action.payload || { title: '', sections: [], elements: {} };
-      // Keep hierarchical structure if present, otherwise use flat structure
-      newPage = {
+      const page = action.payload || { title: '', sections: [] };
+      // Always use flat structure - imported pages should be pre-converted
+      newPage = ensurePagePositions({
         title: page.title || '',
-        sections: page.sections || [],
-        elements: page.elements || {},
-      };
+        sections: (page.sections || []).map(s => ({
+          ...s,
+          id: s.id || generateId(),
+          type: s.type || 'custom',
+          style: s.style || { backgroundColor: '#ffffff', padding: '0' },
+          elements: (s.elements || []).map((el, idx) => ({
+            ...el,
+            id: el.id || generateId(),
+            type: el.type === 'text' ? 'paragraph' : el.type,
+            position: el.position || { x: 24, y: 36 + idx * 120 },
+          })),
+        })),
+      });
       return {
         ...state,
         page: newPage,

@@ -4,11 +4,10 @@ const SECTION_SIDE_PADDING = 32;
 
 const snap = (value) => Math.max(0, Math.round((Number(value) || 0) / GRID) * GRID);
 const makeId = (prefix = 'imp') => `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
-const rgbaAlphaRegex = /rgba?\(([^)]+)\)/i;
 
 const decodeHtml = (value) => {
   if (!value) return '';
-  const text = String(value)
+  return String(value)
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<br\s*\/?>/gi, '\n')
@@ -25,31 +24,12 @@ const decodeHtml = (value) => {
     .replace(/\n\s+/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  return text;
 };
 
 const toPx = (value, fallback = 0) => {
   if (value === undefined || value === null || value === '') return fallback;
   const parsed = parseFloat(String(value).replace('px', ''));
   return Number.isFinite(parsed) ? parsed : fallback;
-};
-
-const parseLineHeight = (value, fontSize, multiplier) => {
-  if (typeof value === 'number') {
-    if (value <= 10) return Math.max(fontSize * value, fontSize);
-    return value;
-  }
-  if (typeof value === 'string') {
-    const trimmed = value.trim().toLowerCase();
-    if (!trimmed) return fontSize * multiplier;
-    if (trimmed.endsWith('px')) return Math.max(toPx(trimmed, fontSize * multiplier), fontSize);
-    const numeric = Number(trimmed);
-    if (!Number.isNaN(numeric)) {
-      if (numeric <= 10) return Math.max(fontSize * numeric, fontSize);
-      return numeric;
-    }
-  }
-  return fontSize * multiplier;
 };
 
 const getSpacingValue = (spacing, edge) => {
@@ -84,8 +64,15 @@ const getNodeSpacing = (node) => {
   return element.spacing || {};
 };
 
-const hasShadow = (element) => Array.isArray(element?.box_shadow)
-  && element.box_shadow.some((shadow) => shadow && String(shadow.color || '').trim());
+const buildBorder = (element) => {
+  const border = element?.border;
+  if (!border) return undefined;
+  const style = border.style || '';
+  const color = border.color || '';
+  const width = border.width?.even_width || border.width?.top || '';
+  if (!style || !color || !width) return undefined;
+  return `${toPx(width, 1)}px ${style} ${color}`;
+};
 
 const buildShadow = (element) => {
   const shadow = Array.isArray(element?.box_shadow) ? element.box_shadow[0] : null;
@@ -98,194 +85,41 @@ const buildShadow = (element) => {
   return `${x}px ${y}px ${blur}px ${spread}px ${shadow.color}${inset}`;
 };
 
-const buildBorder = (element) => {
-  const border = element?.border;
-  if (!border) return undefined;
-  const style = border.style || '';
-  const color = border.color || '';
-  const width = border.width?.even_width || border.width?.top || '';
-  if (!style || !color || !width) return undefined;
-  return `${toPx(width, 1)}px ${style} ${color}`;
-};
-
-const getRadius = (element, fallback = 12) => `${toPx(element?.border?.radius?.size, fallback)}px`;
-
 const getBackgroundColor = (element) => element?.background?.color?.background_color || '';
 
-const parseColorChannels = (color) => {
-  if (!color || typeof color !== 'string') return null;
+const getColorLuminance = (color) => {
+  if (!color || typeof color !== 'string') return 1;
   const trimmed = color.trim();
+  let r, g, b;
   if (trimmed.startsWith('#')) {
     const hex = trimmed.replace('#', '');
     const normalized = hex.length === 3
-      ? hex.split('').map((char) => char + char).join('')
+      ? hex.split('').map((c) => c + c).join('')
       : hex;
-    if (normalized.length !== 6) return null;
-    return {
-      r: parseInt(normalized.slice(0, 2), 16),
-      g: parseInt(normalized.slice(2, 4), 16),
-      b: parseInt(normalized.slice(4, 6), 16),
-      a: 1,
-    };
+    if (normalized.length !== 6) return 1;
+    r = parseInt(normalized.slice(0, 2), 16);
+    g = parseInt(normalized.slice(2, 4), 16);
+    b = parseInt(normalized.slice(4, 6), 16);
+  } else {
+    const match = trimmed.match(/rgba?\(([^)]+)\)/i);
+    if (!match) return 1;
+    const parts = match[1].split(',').map((p) => p.trim());
+    if (parts.length < 3) return 1;
+    r = Number(parts[0]);
+    g = Number(parts[1]);
+    b = Number(parts[2]);
   }
-  const match = trimmed.match(rgbaAlphaRegex);
-  if (!match) return null;
-  const parts = match[1].split(',').map((part) => part.trim());
-  if (parts.length < 3) return null;
-  return {
-    r: Number(parts[0]),
-    g: Number(parts[1]),
-    b: Number(parts[2]),
-    a: parts[3] !== undefined ? Number(parts[3]) : 1,
+  const normalize = (v) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
   };
-};
-
-const getColorLuminance = (color) => {
-  const channels = parseColorChannels(color);
-  if (!channels) return 1;
-  const normalize = (value) => {
-    const scaled = value / 255;
-    return scaled <= 0.03928 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4;
-  };
-  return (0.2126 * normalize(channels.r)) + (0.7152 * normalize(channels.g)) + (0.0722 * normalize(channels.b));
+  return (0.2126 * normalize(r)) + (0.7152 * normalize(g)) + (0.0722 * normalize(b));
 };
 
 const inferTone = ({ backgroundColor = '', hasImage = false, parentTone = 'light' }) => {
   if (hasImage) return 'dark';
   if (!backgroundColor) return parentTone;
   return getColorLuminance(backgroundColor) < 0.34 ? 'dark' : 'light';
-};
-
-const hasVisualSurface = (element) => {
-  const background = element?.background || {};
-  return background.type === 'image'
-    || (background.type === 'color' && !!background?.color?.background_color)
-    || !!buildBorder(element)
-    || hasShadow(element);
-};
-
-const createSurfaceElement = ({
-  id,
-  x,
-  y,
-  width,
-  height,
-  element,
-  kind = 'box',
-  content = {},
-  meta = {},
-}) => {
-  const background = element?.background || {};
-  const explicitBackgroundColor = getBackgroundColor(element);
-  const surfaceTone = inferTone({
-    backgroundColor: explicitBackgroundColor,
-    hasImage: !!background.image?.image_url,
-    parentTone: meta.sectionTone || 'light',
-  });
-  const archetype = meta.sectionArchetype || 'content';
-  const fallbackBackground = kind === 'box'
-    ? (surfaceTone === 'dark' ? 'rgba(255,255,255,0.14)' : '#ffffff')
-    : kind === 'row'
-      ? (archetype === 'info-strip' || archetype === 'card-grid' || archetype === 'cta' ? '#ffffff' : 'transparent')
-      : 'transparent';
-  const style = {
-    width: `${Math.max(80, width)}px`,
-    height: `${Math.max(32, height)}px`,
-    backgroundColor: explicitBackgroundColor || fallbackBackground,
-    borderRadius: getRadius(element, kind === 'box' ? 18 : 12),
-    border: buildBorder(element) || (kind === 'box' && surfaceTone === 'dark' ? '1px solid rgba(255,255,255,0.16)' : undefined),
-    boxShadow: buildShadow(element) || (kind === 'box' ? '0 24px 48px rgba(15,23,42,0.12)' : kind === 'row' && explicitBackgroundColor ? '0 12px 32px rgba(15,23,42,0.08)' : undefined),
-  };
-  if (background.image?.image_url) {
-    style.backgroundImage = `url(${background.image.image_url})`;
-    style.backgroundSize = background.image.image_size || 'cover';
-    style.backgroundPosition = (background.image.image_position || 'center').replace(/-/g, ' ');
-    style.backgroundRepeat = 'no-repeat';
-    if (background.type !== 'image' && explicitBackgroundColor) {
-      style.backgroundBlendMode = 'overlay';
-    }
-  }
-  if (kind === 'box' && style.backgroundColor.includes('rgba')) {
-    style.backdropFilter = 'blur(14px)';
-    style.webkitBackdropFilter = 'blur(14px)';
-  }
-  if (kind === 'column') {
-    style.backgroundColor = explicitBackgroundColor || 'transparent';
-  }
-  if (kind === 'row' && !explicitBackgroundColor) {
-    if (archetype === 'info-strip') {
-      style.borderRadius = getRadius(element, 20);
-      style.boxShadow = '0 18px 44px rgba(15,23,42,0.08)';
-    }
-    if (archetype === 'card-grid') {
-      style.backgroundColor = '#f6f8ff';
-      style.borderRadius = getRadius(element, 22);
-      style.boxShadow = '0 20px 48px rgba(15,23,42,0.06)';
-    }
-    if (archetype === 'cta') {
-      style.backgroundColor = '#ffffff';
-      style.borderRadius = getRadius(element, 22);
-      style.boxShadow = '0 16px 40px rgba(15,23,42,0.08)';
-    }
-  }
-  if (kind === 'column' && archetype === 'card-grid' && !explicitBackgroundColor) {
-    style.backgroundColor = 'transparent';
-  }
-  return {
-    id: id || makeId(kind),
-    type: kind,
-    content: '',
-    position: { x: snap(x), y: snap(y) },
-    surface: true,
-    ...meta,
-    content: { ...content, tone: surfaceTone },
-    style,
-  };
-};
-
-const estimateElementHeight = (element) => {
-  if (!element) return 80;
-  switch (element.type) {
-    case 'heading': {
-      const fontSize = toPx(element.style?.fontSize, 36);
-      const lineHeight = parseLineHeight(element.style?.lineHeight, fontSize, 1.2);
-      const chars = String(element.content || '').length;
-      const approxLines = Math.max(1, Math.ceil(chars / 28));
-      return Math.max(64, Math.ceil(lineHeight * approxLines) + 12);
-    }
-    case 'paragraph': {
-      const fontSize = toPx(element.style?.fontSize, 16);
-      const lineHeight = parseLineHeight(element.style?.lineHeight, fontSize, 1.6);
-      const chars = String(element.content || '').length;
-      const approxLines = Math.max(1, Math.ceil(chars / 52));
-      return Math.max(48, Math.ceil(lineHeight * approxLines) + 8);
-    }
-    case 'button':
-      return 56;
-    case 'image':
-      return Math.max(180, toPx(element.style?.height, toPx(element.style?.maxWidth, 280) * 0.68));
-    case 'form':
-      return 240;
-    case 'box':
-      return Math.max(40, toPx(element.style?.height, 160));
-    case 'icon':
-      return 72;
-    case 'spacer':
-      return toPx(element.style?.height, 40);
-    default:
-      return 80;
-  }
-};
-
-const extractFontSize = (typography, fallback) => {
-  return `${toPx(typography?.font?.size, fallback)}px`;
-};
-
-const extractFontWeight = (typography, fallback = 600) => {
-  const value = typography?.font?.weight;
-  if (value === undefined || value === null || value === '') return fallback;
-  const parsed = parseInt(value, 10);
-  return Number.isFinite(parsed) ? parsed : value;
 };
 
 const getLeafColor = (explicitColor, tone, fallbackLight = '#111827', fallbackDark = '#ffffff') => (
@@ -296,52 +130,18 @@ const getLeafFontSize = ({ nodeType, typography, width, tone }) => {
   const explicit = typography?.font?.size;
   if (explicit) return `${toPx(explicit, nodeType === 'heading' ? 36 : 16)}px`;
   if (nodeType === 'heading') {
-    if (width >= 460) return tone === 'dark' ? '56px' : '44px';
-    if (width >= 320) return '34px';
+    if (width >= 460) return tone === 'dark' ? '52px' : '40px';
+    if (width >= 320) return '32px';
     return '26px';
   }
-  if (nodeType === 'iconHeading') return '18px';
   return width >= 440 ? '18px' : '16px';
 };
 
-const getTextLayoutStyle = ({ align = 'left', maxWidth, isHeading = false }) => ({
-  display: 'inline-block',
-  width: 'fit-content',
-  maxWidth: `${Math.max(140, maxWidth)}px`,
-  whiteSpace: 'normal',
-  wordBreak: 'break-word',
-  margin: align === 'center' ? '0 auto' : align === 'right' ? '0 0 0 auto' : '0',
-  textAlign: align,
-  ...(isHeading ? { textWrap: 'balance' } : {}),
-});
-
-const collectSectionNodeStats = (sectionId, elementsById) => {
-  const counts = {};
-  const visit = (nodeId) => {
-    const node = elementsById[nodeId];
-    if (!node) return;
-    const type = node.type;
-    counts[type] = (counts[type] || 0) + 1;
-    if (type === 'section') {
-      (node.rows || []).forEach(visit);
-    } else if (type === 'row') {
-      (node.columns || []).forEach(visit);
-    } else if (type === 'column' || type === 'box') {
-      (node.elements || []).forEach(visit);
-    }
-  };
-  visit(sectionId);
-  return counts;
-};
-
-const inferSectionArchetype = (sectionNode, elementsById) => {
-  const counts = collectSectionNodeStats(sectionNode.elementId, elementsById);
-  if ((counts.lpform || 0) >= 1 && (counts.image || 0) >= 1 && (counts.heading || 0) >= 1) return 'hero';
-  if ((counts.iconHeading || 0) >= 2) return 'info-strip';
-  if ((counts.box || 0) >= 4 && (counts.heading || 0) >= 4) return 'card-grid';
-  if ((counts.image || 0) >= 2 && (counts.heading || 0) >= 4) return 'people-grid';
-  if ((counts.button || 0) >= 1 && (counts.heading || 0) <= 2) return 'cta';
-  return 'content';
+const extractFontWeight = (typography, fallback = 600) => {
+  const value = typography?.font?.weight;
+  if (value === undefined || value === null || value === '') return fallback;
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : value;
 };
 
 const deriveSectionStyle = (sectionNode) => {
@@ -350,395 +150,184 @@ const deriveSectionStyle = (sectionNode) => {
   const backgroundColor = background?.color?.background_color || '#ffffff';
   const style = {
     backgroundColor,
-    padding: getPaddingShorthand(element.spacing?.padding || { size: '72', even: true }),
+    padding: '0',
   };
   if (background.type === 'image' && background.image?.image_url) {
     style.backgroundImage = `url(${background.image.image_url})`;
     style.backgroundSize = background.image.image_size || 'cover';
     style.backgroundPosition = (background.image.image_position || 'center').replace(/-/g, ' ');
     style.backgroundRepeat = 'no-repeat';
-    style.backgroundBlendMode = 'multiply';
   }
   return style;
 };
 
-const getLayoutWidth = (archetype, layoutWidth) => {
-  if (archetype === 'hero') return Math.min(layoutWidth, 980);
-  if (archetype === 'info-strip') return Math.min(layoutWidth, 900);
-  if (archetype === 'card-grid') return Math.min(layoutWidth, 940);
-  if (archetype === 'cta') return Math.min(layoutWidth, 860);
-  return layoutWidth;
-};
-
-const mapLeafNode = (node, x, y, width, meta = {}) => {
-  const element = node.element || {};
-  const spacing = getNodeSpacing(node);
-  const marginTop = getSpacingValue(spacing.margin, 'top');
-  const marginBottom = getSpacingValue(spacing.margin, 'bottom');
-  const nextY = y + marginTop;
-  const tone = meta.sectionTone || 'light';
-  const baseStyle = {
-    textAlign: element.align || 'left',
-  };
-
-  if (node.type === 'heading') {
-    const content = decodeHtml(element.content || 'Imported heading');
-    const mapped = {
-      id: makeId('heading'),
-      type: 'heading',
-      content,
-      ...meta,
-      position: { x: snap(x), y: snap(nextY) },
-      style: {
-        ...baseStyle,
-        fontSize: getLeafFontSize({ nodeType: 'heading', typography: element.typography, width, tone }),
-        fontWeight: extractFontWeight(element.typography, 700),
-        color: getLeafColor(element.typography?.color, tone),
-        lineHeight: element.typography?.line_height || (tone === 'dark' ? '1.08' : '1.16'),
-        letterSpacing: '-0.03em',
-        ...getTextLayoutStyle({
-          align: element.align || 'left',
-          maxWidth: Math.max(260, width - 16),
-          isHeading: true,
-        }),
-      },
-    };
-    return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 12 };
-  }
-
-  if (node.type === 'text') {
-    const content = decodeHtml(element.content || 'Imported text');
-    const mapped = {
-      id: makeId('paragraph'),
-      type: 'paragraph',
-      content,
-      ...meta,
-      position: { x: snap(x), y: snap(nextY) },
-      style: {
-        ...baseStyle,
-        fontSize: getLeafFontSize({ nodeType: 'text', typography: element.typography, width, tone }),
-        fontWeight: extractFontWeight(element.typography, 400),
-        color: getLeafColor(element.typography?.color, tone, '#4b5563', 'rgba(255,255,255,0.82)'),
-        lineHeight: element.typography?.line_height || '1.6',
-        ...getTextLayoutStyle({
-          align: element.align || 'left',
-          maxWidth: Math.max(240, width - 16),
-        }),
-      },
-    };
-    return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 10 };
-  }
-
-  if (node.type === 'button') {
-    const content = decodeHtml(element.content || 'Click Here');
-    const mapped = {
-      id: makeId('button'),
-      type: 'button',
-      content,
-      ...meta,
-      position: { x: snap(x), y: snap(nextY) },
-      style: {
-        backgroundColor: element.background?.color?.background_color || element.button_bg?.color || (tone === 'dark' ? '#ffffff' : '#2563eb'),
-        color: element.typography?.color || (tone === 'dark' ? '#2252d1' : '#ffffff'),
-        padding: '12px 28px',
-        borderRadius: `${toPx(element.border?.radius?.size, 999)}px`,
-        fontSize: getLeafFontSize({ nodeType: 'button', typography: element.typography, width, tone }),
-        fontWeight: extractFontWeight(element.typography, 700),
-        textAlign: element.align || 'center',
-        display: 'inline-block',
-        border: buildBorder(element),
-        boxShadow: buildShadow(element),
-        margin: element.align === 'center' ? '0 auto' : '0',
-      },
-    };
-    return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 10 };
-  }
-
-  if (node.type === 'image') {
-    const src = element.src || element.image_url || '';
-    if (!src) return { element: null, consumedHeight: 0 };
-    const maxWidth = Math.min(width - 16, toPx(element.desktop_width || element.width, width - 16) || (width - 16));
-    const explicitHeight = toPx(element.desktop_height || element.height, 0);
-    const mapped = {
-      id: makeId('image'),
-      type: 'image',
-      ...meta,
-      content: {
-        src,
-        alt: element.alt || 'Imported image',
-      },
-      position: { x: snap(x), y: snap(nextY) },
-      style: {
-        width: `${Math.max(180, maxWidth)}px`,
-        maxWidth: `${Math.max(180, maxWidth)}px`,
-        height: explicitHeight ? `${explicitHeight}px` : 'auto',
-        borderRadius: element.style === 'circle' ? '999px' : `${toPx(element.border?.radius?.size, src.includes('/logo/') ? 0 : 14)}px`,
-        display: 'block',
-        objectFit: element.size === 'fit' ? 'contain' : 'cover',
-        border: buildBorder(element),
-        boxShadow: buildShadow(element),
-        margin: element.align === 'center' ? '0 auto' : element.align === 'right' ? '0 0 0 auto' : '0',
-      },
-    };
-    return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 16 };
-  }
-
-  if (node.type === 'lpform') {
-    const mapped = {
-      id: makeId('form'),
-      type: 'form',
-      ...meta,
-      content: {
-        fields: [
-          { label: 'Name', type: 'text', placeholder: 'Enter your name' },
-          { label: 'Email', type: 'email', placeholder: 'Enter your email' },
-        ],
-        submitText: 'Submit',
-      },
-      position: { x: snap(x), y: snap(nextY) },
-      style: {
-        padding: '24px 20px',
-        backgroundColor: element.input_bg?.color || (tone === 'dark' ? 'rgba(255,255,255,0.12)' : '#ffffff'),
-        borderRadius: `${toPx(element.input_border?.radius?.size, 16)}px`,
-        maxWidth: `${Math.max(280, width - 16)}px`,
-        buttonBackgroundColor: element.button_bg?.color || '#2CB24C',
-        buttonTextColor: element.button_typography?.color || '#ffffff',
-        inputBackgroundColor: element.input_bg?.color || 'rgba(255,255,255,0.7)',
-        inputTextColor: element.input_typography?.color || '#111827',
-        inputBorderColor: element.input_border?.color || '#d1d5db',
-        inputBorderRadius: `${toPx(element.input_border?.radius?.size, 12)}px`,
-        border: buildBorder(element),
-        boxShadow: buildShadow(element),
-        margin: element.align === 'center' ? '0 auto' : '0',
-      },
-    };
-    return { element: mapped, consumedHeight: estimateElementHeight(mapped) + marginTop + marginBottom + 20 };
-  }
-
-  if (node.type === 'iconHeading') {
-    const content = decodeHtml(element.heading_content || 'Imported item');
-    const iconMapped = {
-      id: makeId('icon'),
-      type: 'icon',
-      ...meta,
-      content: {
-        name: 'Star',
-        size: 18,
-        svg: element.icon_content || '',
-      },
-      position: { x: snap(x), y: snap(nextY + 2) },
-      style: {
-        width: '28px',
-        height: '28px',
-        color: element.icon_color || '#2f66f5',
-        backgroundColor: element.icon_bg_color || '#e8f0ff',
-        borderRadius: element.style === 'roundcorner-fill' ? '10px' : '999px',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      },
-    };
-    const headingMapped = {
-      id: makeId('heading'),
-      type: 'heading',
-      content,
-      ...meta,
-      position: { x: snap(x + 40), y: snap(nextY) },
-      style: {
-        ...baseStyle,
-        fontSize: getLeafFontSize({ nodeType: 'iconHeading', typography: element.typography, width, tone }),
-        fontWeight: extractFontWeight(element.typography, 600),
-        color: getLeafColor(element.typography?.color, tone),
-        lineHeight: element.typography?.line_height || '1.35',
-        ...getTextLayoutStyle({
-          align: element.align || 'left',
-          maxWidth: Math.max(160, width - 56),
-        }),
-      },
-    };
-    return {
-      elements: [iconMapped, headingMapped],
-      consumedHeight: Math.max(36, estimateElementHeight(headingMapped)) + marginTop + marginBottom + 8,
-    };
-  }
-
-  if (node.type === 'spacer') {
-    const height = toPx(element.height, 40);
-    const mapped = {
-      id: makeId('spacer'),
-      type: 'spacer',
-      content: '',
-      ...meta,
-      position: { x: snap(x), y: snap(nextY) },
-      style: { height: `${height}px`, width: '100%' },
-    };
-    return { element: mapped, consumedHeight: height + marginTop + marginBottom };
-  }
-
-  return { element: null, consumedHeight: 0 };
-};
-
+/**
+ * Convert a hierarchical Zoho-style page JSON into a flat free-flow builder format.
+ * All elements become absolutely positioned on the canvas with drag handles.
+ */
 const convertGraphPage = (rawPage) => {
   const elementsById = rawPage.elements || {};
+  const contentWidth = PAGE_WIDTH - (SECTION_SIDE_PADDING * 2);
 
-  const processNode = (nodeId, layout, acc, parentMeta = {}) => {
-    const node = elementsById[nodeId];
-    if (!node) return 0;
+  const mapLeafNode = (node, x, y, width, tone) => {
+    const element = node.element || {};
+    const spacing = getNodeSpacing(node);
+    const marginTop = getSpacingValue(spacing.margin, 'top');
 
-    if (node.type === 'row') {
-      const columns = node.columns || [];
-      const nodeElement = node.element || {};
-      const rowSpacing = getNodeSpacing(node);
-      const marginTop = getSpacingValue(rowSpacing.margin, 'top');
-      const marginBottom = getSpacingValue(rowSpacing.margin, 'bottom');
-      const paddingLeft = getSpacingValue(rowSpacing.padding, 'left');
-      const paddingRight = getSpacingValue(rowSpacing.padding, 'right');
-      const paddingTop = getSpacingValue(rowSpacing.padding, 'top');
-      const paddingBottom = getSpacingValue(rowSpacing.padding, 'bottom');
-      const archetype = parentMeta.sectionArchetype || 'content';
-      const effectiveWidth = getLayoutWidth(archetype, layout.width);
-      const centeredX = layout.x + Math.max(0, Math.round((layout.width - effectiveWidth) / 2));
-      const rowBaseX = archetype === 'content' ? layout.x : centeredX;
-      const innerX = rowBaseX + paddingLeft;
-      const innerWidth = Math.max(260, effectiveWidth - paddingLeft - paddingRight);
-      const ratios = parseRatioList(node.element?.column_ratio, columns.length);
-      const ratioSum = ratios.reduce((sum, value) => sum + value, 0) || columns.length || 1;
-      const rowId = node.elementId || makeId('row');
-      const rowElement = createSurfaceElement({
-        id: rowId,
-        x: rowBaseX,
-        y: layout.y + marginTop,
-        width: effectiveWidth,
-        height: 48,
-        element: nodeElement,
-        kind: 'row',
-        content: {
-          columnIds: [],
-          columnRatio: node.element?.column_ratio || Array.from({ length: columns.length }, () => 1).join(':'),
-          equalColumnHeight: !!nodeElement.equal_column_height,
-          verticalAlign: nodeElement.vertical_alignment || 'top',
-          align: nodeElement.align || 'left',
-          stretchFullWidth: !!nodeElement.stretch_full_width,
+    if (node.type === 'heading') {
+      const content = decodeHtml(element.content || 'Imported heading');
+      return {
+        element: {
+          id: makeId('heading'),
+          type: 'heading',
+          content,
+          position: { x: snap(x), y: snap(y + marginTop) },
+          style: {
+            fontSize: getLeafFontSize({ nodeType: 'heading', typography: element.typography, width, tone }),
+            fontWeight: extractFontWeight(element.typography, 700),
+            color: getLeafColor(element.typography?.color, tone),
+            lineHeight: element.typography?.line_height || '1.16',
+            letterSpacing: '-0.02em',
+            textAlign: element.align || 'left',
+            maxWidth: `${Math.max(260, width)}px`,
+          },
         },
-        meta: parentMeta,
-      });
-      acc.push(rowElement);
-      let offsetX = innerX;
-      let rowHeight = 0;
-      const columnIds = [];
-
-      columns.forEach((columnId, index) => {
-        const columnWidth = Math.round((innerWidth * ratios[index]) / ratioSum);
-        const columnNode = elementsById[columnId];
-        const resolvedColumnId = columnNode?.elementId || columnId || makeId('column');
-        const consumed = processNode(
-          columnId,
-          { x: offsetX, y: layout.y + marginTop + paddingTop, width: columnWidth },
-          acc,
-          { ...parentMeta, parentRowId: rowId, columnRatio: ratios[index], columnIndex: index, explicitColumnId: resolvedColumnId }
-        );
-        rowHeight = Math.max(rowHeight, consumed);
-        columnIds.push(resolvedColumnId);
-        offsetX += columnWidth;
-      });
-
-      const totalRowHeight = rowHeight + paddingBottom;
-      rowElement.content = { ...rowElement.content, columnIds };
-      rowElement.style = {
-        ...rowElement.style,
-        width: `${Math.max(120, effectiveWidth)}px`,
-        height: `${Math.max(48, totalRowHeight)}px`,
+        height: 80,
       };
-
-      return totalRowHeight + marginTop + marginBottom + paddingTop;
     }
 
-    if (node.type === 'column' || node.type === 'box') {
-      const children = node.elements || [];
-      const nodeElement = node.element || {};
-      const spacing = getNodeSpacing(node);
-      const marginTop = getSpacingValue(spacing.margin, 'top');
-      const marginBottom = getSpacingValue(spacing.margin, 'bottom');
-      const paddingTop = getSpacingValue(spacing.padding, 'top');
-      const paddingBottom = getSpacingValue(spacing.padding, 'bottom');
-      const paddingLeft = getSpacingValue(spacing.padding, 'left');
-      const paddingRight = getSpacingValue(spacing.padding, 'right');
-      let cursorY = layout.y + marginTop + paddingTop;
-      const innerX = layout.x + paddingLeft;
-      const innerWidth = Math.max(220, layout.width - paddingLeft - paddingRight);
-      const surfaceId = node.type === 'column'
-        ? (parentMeta.explicitColumnId || node.elementId || makeId(node.type))
-        : (node.elementId || makeId(node.type));
-      const elementType = node.type === 'column' ? 'column' : 'box';
-      const surfaceElement = createSurfaceElement({
-        id: surfaceId,
-        x: layout.x,
-        y: layout.y + marginTop,
-        width: layout.width,
-        height: 48,
-        element: nodeElement,
-        kind: elementType,
-        content: node.type === 'column'
-          ? {
-              ratio: parentMeta.columnRatio || 1,
-              index: parentMeta.columnIndex || 0,
-              parentRowId: parentMeta.parentRowId || null,
-            }
-          : {},
-        meta: {
-          parentRowId: parentMeta.parentRowId || null,
-          parentColumnId: node.type === 'box' ? parentMeta.parentColumnId || null : null,
-          parentBoxId: node.type === 'box' ? parentMeta.parentBoxId || null : null,
+    if (node.type === 'text') {
+      const content = decodeHtml(element.content || 'Imported text');
+      return {
+        element: {
+          id: makeId('paragraph'),
+          type: 'paragraph',
+          content,
+          position: { x: snap(x), y: snap(y + marginTop) },
+          style: {
+            fontSize: getLeafFontSize({ nodeType: 'text', typography: element.typography, width, tone }),
+            fontWeight: extractFontWeight(element.typography, 400),
+            color: getLeafColor(element.typography?.color, tone, '#4b5563', 'rgba(255,255,255,0.82)'),
+            lineHeight: element.typography?.line_height || '1.6',
+            textAlign: element.align || 'left',
+            maxWidth: `${Math.max(240, width)}px`,
+          },
         },
-      });
-      acc.push(surfaceElement);
-
-      children.forEach((childId) => {
-        const childNode = elementsById[childId];
-        if (!childNode) return;
-        if (childNode.type === 'row' || childNode.type === 'column' || childNode.type === 'box') {
-          const childMeta = node.type === 'column'
-            ? {
-                ...parentMeta,
-                parentRowId: parentMeta.parentRowId || null,
-                parentColumnId: surfaceId,
-                explicitColumnId: null,
-              }
-            : {
-                ...parentMeta,
-                parentColumnId: parentMeta.parentColumnId || null,
-                parentBoxId: surfaceId,
-                explicitColumnId: null,
-              };
-          const consumed = processNode(childId, { x: innerX, y: cursorY, width: innerWidth }, acc, childMeta);
-          cursorY += consumed + 12;
-          return;
-        }
-        const mapped = mapLeafNode(childNode, innerX, cursorY, innerWidth, {
-          parentRowId: parentMeta.parentRowId || null,
-          parentColumnId: node.type === 'column' ? surfaceId : parentMeta.parentColumnId || null,
-          parentBoxId: node.type === 'box' ? surfaceId : parentMeta.parentBoxId || null,
-          sectionTone: parentMeta.sectionTone || 'light',
-        });
-        if (Array.isArray(mapped.elements)) acc.push(...mapped.elements);
-        else if (mapped.element) acc.push(mapped.element);
-        cursorY += mapped.consumedHeight || 0;
-      });
-
-      const totalHeight = Math.max(0, cursorY - layout.y + paddingBottom + marginBottom);
-      surfaceElement.style = {
-        ...surfaceElement.style,
-        width: `${Math.max(120, layout.width)}px`,
-        height: `${Math.max(48, totalHeight - marginTop - marginBottom)}px`,
+        height: 60,
       };
-
-      return totalHeight;
     }
 
-    const mapped = mapLeafNode(node, layout.x, layout.y, layout.width, parentMeta);
-    if (Array.isArray(mapped.elements)) acc.push(...mapped.elements);
-    else if (mapped.element) acc.push(mapped.element);
-    return mapped.consumedHeight || 0;
+    if (node.type === 'button') {
+      const content = decodeHtml(element.content || 'Click Here');
+      return {
+        element: {
+          id: makeId('button'),
+          type: 'button',
+          content,
+          position: { x: snap(x), y: snap(y + marginTop) },
+          style: {
+            backgroundColor: element.background?.color?.background_color || element.button_bg?.color || (tone === 'dark' ? '#ffffff' : '#2563eb'),
+            color: element.typography?.color || (tone === 'dark' ? '#111827' : '#ffffff'),
+            padding: '12px 28px',
+            borderRadius: `${toPx(element.border?.radius?.size, 8)}px`,
+            fontSize: getLeafFontSize({ nodeType: 'button', typography: element.typography, width, tone }),
+            fontWeight: extractFontWeight(element.typography, 700),
+            textAlign: 'center',
+            border: buildBorder(element),
+          },
+        },
+        height: 56,
+      };
+    }
+
+    if (node.type === 'image') {
+      const src = element.src || element.image_url || '';
+      if (!src) return { element: null, height: 0 };
+      const maxWidth = Math.min(width, toPx(element.desktop_width || element.width, width));
+      return {
+        element: {
+          id: makeId('image'),
+          type: 'image',
+          content: { src, alt: element.alt || 'Imported image' },
+          position: { x: snap(x), y: snap(y + marginTop) },
+          style: {
+            width: `${Math.max(180, maxWidth)}px`,
+            maxWidth: `${Math.max(180, maxWidth)}px`,
+            borderRadius: element.style === 'circle' ? '999px' : `${toPx(element.border?.radius?.size, 12)}px`,
+            objectFit: element.size === 'fit' ? 'contain' : 'cover',
+            border: buildBorder(element),
+            boxShadow: buildShadow(element),
+          },
+        },
+        height: Math.max(180, toPx(element.desktop_height || element.height, maxWidth * 0.6)),
+      };
+    }
+
+    if (node.type === 'lpform') {
+      return {
+        element: {
+          id: makeId('form'),
+          type: 'form',
+          content: {
+            fields: [
+              { label: 'Name', type: 'text', placeholder: 'Enter your name' },
+              { label: 'Email', type: 'email', placeholder: 'Enter your email' },
+            ],
+            submitText: 'Submit',
+          },
+          position: { x: snap(x), y: snap(y + marginTop) },
+          style: {
+            padding: '24px 20px',
+            backgroundColor: element.input_bg?.color || '#ffffff',
+            borderRadius: `${toPx(element.input_border?.radius?.size, 12)}px`,
+            maxWidth: `${Math.max(280, width)}px`,
+            buttonBackgroundColor: element.button_bg?.color || '#2CB24C',
+            buttonTextColor: element.button_typography?.color || '#ffffff',
+            inputBackgroundColor: element.input_bg?.color || '#ffffff',
+            inputTextColor: '#111827',
+            inputBorderColor: element.input_border?.color || '#d1d5db',
+          },
+        },
+        height: 240,
+      };
+    }
+
+    if (node.type === 'spacer') {
+      const height = toPx(element.height, 40);
+      return {
+        element: {
+          id: makeId('spacer'),
+          type: 'spacer',
+          content: '',
+          position: { x: snap(x), y: snap(y + marginTop) },
+          style: { height: `${height}px`, width: '100%' },
+        },
+        height,
+      };
+    }
+
+    if (node.type === 'iconHeading') {
+      const content = decodeHtml(element.heading_content || 'Imported item');
+      return {
+        element: {
+          id: makeId('heading'),
+          type: 'heading',
+          content,
+          position: { x: snap(x), y: snap(y + marginTop) },
+          style: {
+            fontSize: '18px',
+            fontWeight: extractFontWeight(element.typography, 600),
+            color: getLeafColor(element.typography?.color, tone),
+            lineHeight: '1.35',
+            textAlign: element.align || 'left',
+            maxWidth: `${Math.max(200, width)}px`,
+          },
+        },
+        height: 40,
+      };
+    }
+
+    return { element: null, height: 0 };
   };
 
   const sections = (rawPage.sections || []).map((sectionId, sectionIndex) => {
@@ -747,44 +336,114 @@ const convertGraphPage = (rawPage) => {
       return {
         id: makeId('section'),
         type: 'custom',
-        style: { backgroundColor: '#ffffff', padding: '48px 24px' },
+        style: { backgroundColor: '#ffffff', padding: '0' },
         elements: [],
       };
     }
 
-    const importedElements = [];
-    const rows = sectionNode.rows || [];
-    let cursorY = 32;
-    const contentWidth = PAGE_WIDTH - (SECTION_SIDE_PADDING * 2);
     const sectionStyle = deriveSectionStyle(sectionNode);
     const sectionTone = inferTone({
       backgroundColor: sectionStyle.backgroundColor,
       hasImage: !!sectionStyle.backgroundImage,
       parentTone: 'light',
     });
-    const sectionArchetype = inferSectionArchetype(sectionNode, elementsById);
+
+    const flatElements = [];
+    const rows = sectionNode.rows || [];
+    let cursorY = 32;
 
     rows.forEach((rowId) => {
-      const consumed = processNode(
-        rowId,
-        { x: SECTION_SIDE_PADDING, y: cursorY, width: contentWidth },
-        importedElements,
-        { sectionTone, sectionArchetype }
-      );
-      cursorY += consumed + 20;
+      const rowNode = elementsById[rowId];
+      if (!rowNode) return;
+
+      const columns = rowNode.columns || [];
+      const ratios = parseRatioList(rowNode.element?.column_ratio, columns.length);
+      const ratioSum = ratios.reduce((s, v) => s + v, 0) || 1;
+
+      let colOffsetX = SECTION_SIDE_PADDING;
+      let maxColHeight = 0;
+
+      columns.forEach((colId, colIdx) => {
+        const colNode = elementsById[colId];
+        if (!colNode) return;
+
+        const colWidth = Math.round((contentWidth * ratios[colIdx]) / ratioSum);
+        const children = colNode.elements || [];
+        let innerY = cursorY;
+
+        children.forEach((childId) => {
+          const childNode = elementsById[childId];
+          if (!childNode) return;
+
+          // Handle nested boxes
+          if (childNode.type === 'box') {
+            const boxChildren = childNode.elements || [];
+            boxChildren.forEach((boxChildId) => {
+              const boxChild = elementsById[boxChildId];
+              if (!boxChild) return;
+              const mapped = mapLeafNode(boxChild, colOffsetX + 16, innerY, colWidth - 32, sectionTone);
+              if (mapped.element) {
+                flatElements.push(mapped.element);
+                innerY += mapped.height + 12;
+              }
+            });
+            return;
+          }
+
+          // Handle nested rows
+          if (childNode.type === 'row') {
+            const nestedCols = childNode.columns || [];
+            const nestedRatios = parseRatioList(childNode.element?.column_ratio, nestedCols.length);
+            const nestedRatioSum = nestedRatios.reduce((s, v) => s + v, 0) || 1;
+            let nestedX = colOffsetX;
+            let nestedMaxH = 0;
+
+            nestedCols.forEach((ncId, ncIdx) => {
+              const ncNode = elementsById[ncId];
+              if (!ncNode) return;
+              const ncWidth = Math.round((colWidth * nestedRatios[ncIdx]) / nestedRatioSum);
+              let ncY = innerY;
+              (ncNode.elements || []).forEach((ncChildId) => {
+                const ncChild = elementsById[ncChildId];
+                if (!ncChild) return;
+                const mapped = mapLeafNode(ncChild, nestedX, ncY, ncWidth - 16, sectionTone);
+                if (mapped.element) {
+                  flatElements.push(mapped.element);
+                  ncY += mapped.height + 12;
+                }
+              });
+              nestedMaxH = Math.max(nestedMaxH, ncY - innerY);
+              nestedX += ncWidth;
+            });
+            innerY += nestedMaxH + 16;
+            return;
+          }
+
+          const mapped = mapLeafNode(childNode, colOffsetX, innerY, colWidth - 16, sectionTone);
+          if (mapped.element) {
+            flatElements.push(mapped.element);
+            innerY += mapped.height + 12;
+          }
+        });
+
+        maxColHeight = Math.max(maxColHeight, innerY - cursorY);
+        colOffsetX += colWidth;
+      });
+
+      cursorY += maxColHeight + 24;
     });
 
     return {
       id: sectionNode.element?.section_id || sectionNode.elementId || makeId(`section-${sectionIndex + 1}`),
       type: sectionNode.type || 'custom',
       style: sectionStyle,
-      elements: importedElements,
+      elements: flatElements,
     };
   });
 
   const firstHeading = sections
-    .flatMap((section) => section.elements)
-    .find((element) => element.type === 'heading' && element.content);
+    .flatMap((s) => s.elements)
+    .find((el) => el.type === 'heading' && el.content);
 
   return {
     title: decodeHtml(firstHeading?.content || rawPage.title || 'Imported Landing Page'),
@@ -796,7 +455,7 @@ const normalizeBuilderPage = (page) => {
   const sections = (page.sections || []).map((section, sectionIndex) => ({
     id: section.id || makeId(`section-${sectionIndex + 1}`),
     type: section.type || 'custom',
-    style: section.style || { backgroundColor: '#ffffff', padding: '48px 24px' },
+    style: section.style || { backgroundColor: '#ffffff', padding: '0' },
     elements: (section.elements || []).map((element, elementIndex) => ({
       ...element,
       id: element.id || makeId(element.type || `element-${elementIndex + 1}`),
@@ -818,10 +477,16 @@ export const importLandingPageJson = (raw) => {
 
   const page = raw.page && typeof raw.page === 'object' ? raw.page : raw;
 
+  // Check for flat builder format first (sections with element arrays)
   if (Array.isArray(page.sections) && page.sections.every((section) => section && typeof section === 'object' && !Array.isArray(section))) {
+    // Check if it's actually a Zoho hierarchical format (sections are string IDs referencing elements map)
+    if (page.type === 'page' && page.elements && typeof page.elements === 'object' && page.sections.length > 0 && typeof page.sections[0] === 'string') {
+      return convertGraphPage(page);
+    }
     return normalizeBuilderPage(page);
   }
 
+  // Zoho hierarchical format
   if (page.type === 'page' && Array.isArray(page.sections) && page.elements && typeof page.elements === 'object') {
     return convertGraphPage(page);
   }

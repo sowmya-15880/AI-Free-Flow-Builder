@@ -1,37 +1,62 @@
 # FlowState AI Landing Page Builder - PRD
 
-## Problem Statement
-Build an AI-based free flow landing page builder similar to Wix.com's Harmony AI page builder.
+## Original Problem Statement
+User has an AI-based free flow landing page builder. They uploaded a sample-page.json (Zoho hierarchical JSON format). Requirements:
+1. Change the logic/wireframe so the builder accepts the JSON
+2. The builder needs to load the page from the uploaded JSON
+3. Elements must be editable via property box
+4. Elements should be free-flow moveable (absolute positioning, drag anywhere)
 
 ## Architecture
-- **Frontend**: React + Tailwind CSS + dnd-kit
-- **Backend**: FastAPI + MongoDB + GPT-5.2
+- **Frontend**: React.js (CRA) with TailwindCSS, @dnd-kit for drag-and-drop
+- **Backend**: FastAPI (Python) with MongoDB, emergentintegrations for AI generation
+- **AI**: GPT-4o via Emergent LLM key for page generation
+- **Canvas**: Free-flow absolute positioning with snap-to-grid (8px)
 
-## What's Been Implemented (Feb 2026)
-### V1 (Initial)
-- AI prompt page with GPT-5.2 generation
-- Basic builder with fixed sidebar and properties panel
+## User Personas
+- Web developers building landing pages
+- Marketers needing quick page creation
+- Designers importing existing Zoho page JSON layouts
 
-### V2 (Current - User Feedback)
-- [x] Icon strip sidebar (Sections, Elements, Media, Popups, Forms, Apps) matching Wix reference
-- [x] Sliding white sub-panel that opens/closes on icon click
-- [x] Floating properties panel with close button (not fixed)
-- [x] Coral/pink (#e74c6f) color palette matching reference video
-- [x] Element reordering via drag handles within sections
-- [x] Categorized stock images (7 categories) for relevant AI-generated images
-- [x] Section templates (Hero, Features, Team, CTA, Footer)
-- [x] Undo/Redo with keyboard shortcuts
-- [x] JSON + HTML export
-- [x] Device preview (desktop/tablet/mobile)
+## Core Requirements (Static)
+- JSON upload and import (Zoho hierarchical → flat free-flow conversion)
+- AI-powered page generation from text prompts
+- Free-flow drag-and-drop element positioning
+- Full property editing panel (style, typography, shape, CSS, visibility)
+- Multi-section canvas with section management
+- Undo/Redo support
+- Device preview (desktop, tablet, mobile)
+
+## What's Been Implemented (2026-03-30)
+1. **JSON Import Pipeline** (`importPageJson.js`): Converts Zoho hierarchical JSON (type:page, elements map, sections → rows → columns → children) into flat free-flow structure with absolute positions
+2. **AI Generation** (`server.py`): Uses emergentintegrations with GPT-4o to generate landing page JSON from prompts, with local fallback
+3. **BuilderContext**: Updated SET_PAGE action to normalize all imported pages to flat structure (removes elements map, ensures positions)
+4. **Free-flow Elements**: All imported elements render as `FreeFlowElement` with drag handles for repositioning
+5. **Properties Panel**: Full editing for heading, paragraph, image, button, form elements (font, color, spacing, borders, etc.)
+
+## Test Results
+- Backend: 100% pass
+- Frontend: 100% pass
+- Integration: 100% pass
 
 ## Prioritized Backlog
-### P1
-- Vue.js migration (user wants later)
-- True free-flow absolute positioning within sections
-- Inline text editing on canvas
+### P0 (Next)
+- Export to HTML/CSS
+- Save/load projects from MongoDB
 
-### P2
-- Image search/upload in builder
-- Animation/transition editor
+### P1
 - Custom fonts panel
 - Multi-page support
+- Element grouping/ungrouping
+
+### P2
+- Animation/transition editor
+- Responsive breakpoint editor
+- Version history UI
+- Template gallery
+
+## Next Tasks
+- Improve element snapping with smart guides
+- Add text inline editing improvements
+- Section background image picker
+- Element z-index management
