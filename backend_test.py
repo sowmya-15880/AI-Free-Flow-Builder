@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 
 class LandingPageBuilderAPITester:
-    def __init__(self, base_url="http://127.0.0.1:8001/api"):
+    def __init__(self, base_url="https://b467106f-57d6-4a8d-a53d-0379a62be61d.preview.emergentagent.com/api"):
         self.base_url = base_url
         self.tests_run = 0
         self.tests_passed = 0
