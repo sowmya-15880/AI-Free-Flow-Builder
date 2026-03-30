@@ -1,43 +1,56 @@
 # FlowState AI Landing Page Builder - PRD
 
 ## Original Problem Statement
-User has an AI-based free flow landing page builder. They uploaded a sample-page.json (Zoho hierarchical JSON format). Requirements:
-1. Change the logic/wireframe so the builder accepts the JSON
-2. The builder needs to load the page from the uploaded JSON
-3. Elements must be editable via property box
-4. Elements should be free-flow moveable (absolute positioning, drag anywhere)
+User has an AI-based free flow landing page builder. Requirements:
+1. Builder accepts JSON (Zoho hierarchical format) and loads as editable page
+2. All elements must be free-flow moveable (absolute positioned, drag anywhere)
+3. Full property editing via properties panel
+4. AI should generate RICH, magazine-quality landing pages (Dribbble/UpLabs quality)
+5. Template gallery on prompt page with pre-made template options
+6. Enhanced AI prompt with specific UI/UX design principles
 
 ## Architecture
 - **Frontend**: React.js (CRA) with TailwindCSS, @dnd-kit for drag-and-drop
 - **Backend**: FastAPI (Python) with MongoDB, emergentintegrations for AI generation
-- **AI**: GPT-4o via Emergent LLM key for page generation
-- **Canvas**: Free-flow absolute positioning with snap-to-grid (8px)
+- **AI**: GPT-4o via Emergent LLM key with premium UI/UX design system prompt
+- **Canvas**: Free-flow absolute positioning with 8px snap grid
 
-## User Personas
-- Web developers building landing pages
-- Marketers needing quick page creation
-- Designers importing existing Zoho page JSON layouts
+## What's Been Implemented
 
-## Core Requirements (Static)
-- JSON upload and import (Zoho hierarchical → flat free-flow conversion)
-- AI-powered page generation from text prompts
+### Phase 1 (2026-03-30) - JSON Import & Free-Flow
+- JSON Import Pipeline (Zoho hierarchical → flat free-flow conversion)
 - Free-flow drag-and-drop element positioning
-- Full property editing panel (style, typography, shape, CSS, visibility)
-- Multi-section canvas with section management
-- Undo/Redo support
-- Device preview (desktop, tablet, mobile)
+- Full property editing panel
 
-## What's Been Implemented (2026-03-30)
-1. **JSON Import Pipeline** (`importPageJson.js`): Converts Zoho hierarchical JSON (type:page, elements map, sections → rows → columns → children) into flat free-flow structure with absolute positions
-2. **AI Generation** (`server.py`): Uses emergentintegrations with GPT-4o to generate landing page JSON from prompts, with local fallback
-3. **BuilderContext**: Updated SET_PAGE action to normalize all imported pages to flat structure (removes elements map, ensures positions)
-4. **Free-flow Elements**: All imported elements render as `FreeFlowElement` with drag handles for repositioning
-5. **Properties Panel**: Full editing for heading, paragraph, image, button, form elements (font, color, spacing, borders, etc.)
+### Phase 2 (2026-03-30) - Rich AI Generation
+- GPT-4o generates 8-12 sections with 40-60+ elements
+- Rich fallback page with 10 sections
+- Expanded stock image library (10 categories)
+
+### Phase 3 (2026-03-30) - Template Gallery & Premium Prompt
+1. **Template Gallery Tab**: 9 pre-made templates on the prompt page:
+   - SaaS Dark (neon indigo/violet accents)
+   - Gradient SaaS (purple-blue gradients)
+   - Minimal White (clean startup look)
+   - Playful Creative (warm pastels)
+   - Food & Restaurant (dark with amber accents)
+   - Fitness & Health (high-energy neon green)
+   - Event & Conference (deep purple, speaker profiles)
+   - E-Commerce (navy with orange accents)
+   - Education & Courses (emerald/teal theme)
+2. **Enhanced AI System Prompt**: Premium UI/UX design principles from user's specification:
+   - Dribbble/UpLabs inspired quality
+   - Mandatory section structure (navbar → hero → features → showcase → social proof → how-it-works → CTA → footer)
+   - Style variations (dark neon, gradient, minimal white, playful)
+   - 50-80+ elements per page, card grids, avatar testimonials, stats, badges
+   - Tailwind CSS-inspired styling principles
+3. **Tab Interface**: Templates (default) + Custom Generate tabs
+4. **One-Click Generation**: Click any template card to instantly generate a full page
 
 ## Test Results
-- Backend: 100% pass
-- Frontend: 100% pass
-- Integration: 100% pass
+- Backend: 95% (generation works, longer processing times ~2min)
+- Frontend: 100% pass (all UI flows working)
+- Integration: 95% pass
 
 ## Prioritized Backlog
 ### P0 (Next)
@@ -45,18 +58,12 @@ User has an AI-based free flow landing page builder. They uploaded a sample-page
 - Save/load projects from MongoDB
 
 ### P1
+- Template preview thumbnails (static screenshots)
 - Custom fonts panel
-- Multi-page support
-- Element grouping/ungrouping
+- Element z-index management
 
 ### P2
 - Animation/transition editor
 - Responsive breakpoint editor
 - Version history UI
-- Template gallery
-
-## Next Tasks
-- Improve element snapping with smart guides
-- Add text inline editing improvements
-- Section background image picker
-- Element z-index management
+- Multi-page support
