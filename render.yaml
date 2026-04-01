@@ -4,8 +4,8 @@ services:
     runtime: python
     rootDir: backend
     plan: free
-    buildCommand: sh -lc 'echo "--- ffb-api requirements.txt ---" && cat requirements.txt && echo "--- python ---" && python --version && echo "--- installing ---" && python -m pip install --no-cache-dir -r requirements.txt'
-    startCommand: python -m uvicorn server:app --host 0.0.0.0 --port $PORT
+    buildCommand: python3 -m pip install --no-cache-dir -r requirements.txt
+    startCommand: python3 -m uvicorn server:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.14
