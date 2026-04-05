@@ -778,7 +778,7 @@ export default function Canvas({ device, onCanvasInteract }) {
           <div className="canvas-empty" data-testid="canvas-empty">
             <Plus size={28} className="canvas-empty-icon" />
             <p>Your canvas is empty</p>
-            <p style={{ fontSize: 13, color: '#b0b0b8' }}>Add sections from the sidebar or generate with AI</p>
+            <p style={{ fontSize: 13, color: '#b0b0b8' }}>Add sections from the sidebar or import page JSON</p>
             <button className="add-section-btn" onClick={() => dispatch({ type: 'ADD_SECTION' })} style={{ marginTop: 6 }} data-testid="add-first-section-btn">
               <Plus size={13} /> Add Section
             </button>
