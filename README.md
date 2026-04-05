@@ -1,44 +1,55 @@
-# AI Free Flow Landing Page Builder
+# Free Flow Landing Page Builder
 
-This project contains:
+This repository contains the frontend implementation of a free flow landing page builder.
+It is designed to load page JSON into an editable visual canvas where users can rearrange content, adjust styles, preview layouts, and export the result.
 
-- `frontend` - React-based free flow landing page builder UI
-- `backend` - FastAPI backend used by the builder
+## What Is Included
 
-## Run The Application
+- `frontend/`
+  React application for the visual builder interface.
+- `rust/`
+  Optional canvas-related workspace used by the frontend integration layer.
+- `scripts/`
+  Local helper scripts used by the frontend workspace.
 
-After unzipping the project folder, run the app using 2 terminal windows/tabs.
+## What The Frontend Supports
 
-### 1. Start Backend
+- starter layouts that open directly in the builder
+- JSON import for supported landing page documents
+- free-flow editing on the canvas
+- section, row, column, box, and element editing
+- inline text editing for supported elements
+- responsive preview modes
+- JSON and HTML export
+
+## Main Entry Points
+
+- Prompt page: opens starter layouts or imports an existing JSON file
+- Builder page: visual editing canvas with sidebar, properties panel, and export actions
+
+## Local Development
+
+From the repo root:
 
 ```sh
-cd /path/to/app/backend
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-python -m uvicorn server:app --host 127.0.0.1 --port 8001
-```
-
-### 2. Start Frontend
-
-Open a new terminal window/tab and run:
-
-```sh
-cd /path/to/app/frontend
+cd frontend
 npm install
 HOST=127.0.0.1 PORT=3000 node node_modules/@craco/craco/dist/bin/craco.js start
 ```
 
-### 3. Open The App
+Then open:
 
-Once both are running, open:
+- [http://127.0.0.1:3000](http://127.0.0.1:3000)
 
-- Frontend: `http://127.0.0.1:3000`
-- Backend API: `http://127.0.0.1:8001`
+## Production Build
+
+```sh
+cd frontend
+npm run build
+```
 
 ## Notes
 
-- Replace `/path/to/app` with the actual unzipped folder path.
-- Even if `node_modules` is already present, running `npm install` is still recommended.
-- The backend uses the `.env` file inside the `backend` folder.
-- If `python3` does not work on the machine, try `python`.
+- This repo is frontend-only in its current state.
+- The builder can work from starter layouts or uploaded page JSON.
+- Imported documents are loaded into the same editable canvas used by manually created pages.
